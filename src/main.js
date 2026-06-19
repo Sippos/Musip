@@ -50,6 +50,12 @@ function renderTrackTabs() {
         btn.className = `inst-btn ${track.id === state.activeTrackId ? 'active' : ''}`;
         btn.innerHTML = `
             <span class="track-name">${track.name}</span>
+            <span class="expand-toggle" style="margin-left: 8px; opacity: 0.7; vertical-align: middle;" title="Expand/Collapse Piano Roll">
+                ${track.expanded ? 
+                    '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><polyline points="4 14 12 6 20 14"></polyline></svg>' : 
+                    '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><polyline points="6 9 12 15 18 9"></polyline></svg>'
+                }
+            </span>
             <span class="mute-toggle" style="margin-left: 8px; opacity: 0.7; vertical-align: middle;" title="Mute/Unmute">
                 ${track.muted ? 
                     '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><line x1="1" y1="1" x2="23" y2="23"></line><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M23 9l-6 6"></path><path d="M17 9l6 6"></path></svg>' : 
@@ -66,6 +72,13 @@ function renderTrackTabs() {
         if (track.muted) {
             btn.style.opacity = '0.5';
         }
+        
+        const expandToggle = btn.querySelector('.expand-toggle');
+        expandToggle.addEventListener('click', (e) => {
+            e.stopPropagation(); // prevent track selection
+            track.expanded = !track.expanded;
+            renderTrackTabs();
+        });
         
         const muteToggle = btn.querySelector('.mute-toggle');
         muteToggle.addEventListener('click', (e) => {
@@ -182,7 +195,9 @@ trackOptBtns.forEach(btn => {
             name: `Track ${state.tracks.length + 1}`,
             presetId: presetId,
             color: color,
-            type: type
+            type: type,
+            muted: false,
+            expanded: false
         };
         
         state.tracks.push(newTrack);

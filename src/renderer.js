@@ -1,7 +1,7 @@
 import { state, getActiveTrack } from './state.js';
 import * as Tone from 'tone';
 import { LOOP_LENGTH_SECONDS, masterAnalyser } from './audio.js';
-import { noteToY } from './pitchMap.js';
+import { noteToY, getTrackLayout } from './pitchMap.js';
 
 let canvas, ctx;
 let bgLightness = 96;
@@ -90,26 +90,41 @@ function render(time) {
     const currentSecs = (Tone.Transport.seconds % loopDur);
     const playheadX = (currentSecs / loopDur) * canvas.width;
     
-    const trackHeight = 150;
     const scrollY = state.camera ? state.camera.scrollY : 0;
+    const layout = getTrackLayout(state.tracks, scrollY);
     
     // Draw track backgrounds and dividers
-    state.tracks.forEach((track, index) => {
-        const trackTop = (index * trackHeight) + scrollY;
+    layout.forEach((trackLayout, index) => {
+        const trackTop = trackLayout.top;
+        const trackHeight = trackLayout.height;
+        const track = trackLayout.track;
         
         // Active track highlight
         ctx.fillStyle = track.id === state.activeTrackId ? 'rgba(0,0,0,0.03)' : 'transparent';
         ctx.fillRect(0, trackTop, canvas.width, trackHeight);
         
-        // Draw 5 lane dividers within the track
-        ctx.strokeStyle = 'rgba(0,0,0,0.03)';
-        ctx.lineWidth = 1;
-        for (let i = 1; i < 5; i++) {
-            const laneY = trackTop + (i * (trackHeight / 5));
-            ctx.beginPath();
-            ctx.moveTo(0, laneY);
-            ctx.lineTo(canvas.width, laneY);
-            ctx.stroke();
+        // Draw 5 lane dividers ONLY if collapsed
+        if (!track.expanded) {
+            ctx.strokeStyle = 'rgba(0,0,0,0.03)';
+            ctx.lineWidth = 1;
+            for (let i = 1; i < 5; i++) {
+                const laneY = trackTop + (i * (trackHeight / 5));
+                ctx.beginPath();
+                ctx.moveTo(0, laneY);
+                ctx.lineTo(canvas.width, laneY);
+                ctx.stroke();
+            }
+        } else {
+            // Draw faint grid for continuous piano roll
+            ctx.strokeStyle = 'rgba(0,0,0,0.02)';
+            ctx.lineWidth = 1;
+            for (let i = 1; i < 12; i++) {
+                const laneY = trackTop + (i * (trackHeight / 12));
+                ctx.beginPath();
+                ctx.moveTo(0, laneY);
+                ctx.lineTo(canvas.width, laneY);
+                ctx.stroke();
+            }
         }
         
         // Track divider
@@ -123,11 +138,10 @@ function render(time) {
     
     // Draw notes
     state.notes.forEach(note => {
-        const trackIndex = state.tracks.findIndex(t => t.id === note.trackId);
-        if (trackIndex === -1) return;
-        const track = state.tracks[trackIndex];
+        const trackLayout = layout.find(l => l.track.id === note.trackId);
+        if (!trackLayout) return;
         
-        const trackTop = (trackIndex * trackHeight) + scrollY;
+        const { track, top: trackTop, height: trackHeight } = trackLayout;
         
         // Don't draw notes if they are scrolled off screen
         if (trackTop > canvas.height || trackTop + trackHeight < 0) return;
@@ -147,9 +161,15 @@ function render(time) {
         const durSecs = Tone.Time(note.duration).toSeconds();
         const noteWidth = (durSecs / loopDur) * canvas.width;
         
-        const noteY = noteToY(note, trackTop, trackHeight);
-        const laneHeight = trackHeight / 5;
-        const noteHeight = laneHeight * 0.8;
+        const noteY = noteToY(note, trackTop, trackHeight, track.expanded);
+        
+        let noteHeight;
+        if (track.expanded) {
+            noteHeight = Math.max(4, canvas.height * 0.015);
+        } else {
+            const laneHeight = trackHeight / 5;
+            noteHeight = laneHeight * 0.8;
+        }
         
         ctx.beginPath();
         if (ctx.roundRect) {

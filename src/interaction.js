@@ -1,7 +1,7 @@
 import { state, generateId, getActiveTrack } from './state.js';
 import * as Tone from 'tone';
 import { getTrackScale, playSound, syncAudioPart, LOOP_LENGTH_SECONDS, instrumentsStart, instrumentsStop } from './audio.js';
-import { noteToY } from './pitchMap.js';
+import { noteToY, yToNote, getTrackLayout } from './pitchMap.js';
 
 const keys = ['a', 's', 'd', 'f', 'g'];
 const activePresses = {};
@@ -114,15 +114,15 @@ export function initInteraction(canvasEl) {
     // Prevent context menu to allow right-click erasing
     canvasEl.addEventListener('contextmenu', e => e.preventDefault());
     
-    const trackHeight = 150;
-
     // Scroll
     canvasEl.addEventListener('wheel', (e) => {
         if (!state.isPlaying) return;
         e.preventDefault(); // prevent actual page scroll
         
         state.camera.scrollY -= e.deltaY;
-        const maxScroll = Math.max(0, (state.tracks.length * trackHeight) - canvasEl.height);
+        const layout = getTrackLayout(state.tracks, 0);
+        const totalHeight = layout.length > 0 ? layout[layout.length - 1].bottom : 0;
+        const maxScroll = Math.max(0, totalHeight - canvasEl.height);
         state.camera.scrollY = Math.max(-maxScroll, Math.min(0, state.camera.scrollY));
     }, { passive: false });
 
@@ -138,21 +138,28 @@ export function initInteraction(canvasEl) {
         
         const loopDur = LOOP_LENGTH_SECONDS();
         const scrollY = state.camera ? state.camera.scrollY : 0;
+        const layout = getTrackLayout(state.tracks, scrollY);
         
         const hitTest = (n) => {
-            const trackIndex = state.tracks.findIndex(t => t.id === n.trackId);
-            if (trackIndex === -1) return false;
+            const trackLayout = layout.find(l => l.track.id === n.trackId);
+            if (!trackLayout) return false;
             
-            const trackTop = (trackIndex * trackHeight) + scrollY;
+            const { track, top: trackTop, height: trackHeight } = trackLayout;
             
             const noteSecs = Tone.Time(n.time).toSeconds() % loopDur;
             const noteX = (noteSecs / loopDur) * canvasEl.width;
             const durSecs = Tone.Time(n.duration).toSeconds();
             const noteWidth = (durSecs / loopDur) * canvasEl.width;
             
-            const noteY = noteToY(n, trackTop, trackHeight);
-            const laneHeight = trackHeight / 5;
-            const noteHeight = laneHeight * 0.8;
+            const noteY = noteToY(n, trackTop, trackHeight, track.expanded);
+            
+            let noteHeight;
+            if (track.expanded) {
+                noteHeight = Math.max(4, canvasEl.height * 0.015);
+            } else {
+                const laneHeight = trackHeight / 5;
+                noteHeight = laneHeight * 0.8;
+            }
             const halfHeight = noteHeight / 2;
             
             return (clickX >= noteX && clickX <= noteX + noteWidth &&
@@ -199,12 +206,24 @@ export function initInteraction(canvasEl) {
             dragNoteIndex = noteIndex;
             dragStartX = clickX;
             dragStartY = clickY;
+            dragStartNoteSecs = Tone.Time(dragNote.time).toSeconds() % loopDur;
             
             if (dragNote.trackId !== state.activeTrackId) {
                 state.activeTrackId = dragNote.trackId;
                 window.dispatchEvent(new CustomEvent('activeTrackChanged'));
             }
         } else {
+            // Determine clicked track from layout
+            const clickedTrackLayout = layout.find(l => clickY >= l.top && clickY <= l.bottom);
+            if (!clickedTrackLayout) return; // Clicked outside all tracks
+            
+            const { track: clickedTrack, top: trackTop, height: trackHeight } = clickedTrackLayout;
+            
+            if (clickedTrack.id !== state.activeTrackId) {
+                state.activeTrackId = clickedTrack.id;
+                window.dispatchEvent(new CustomEvent('activeTrackChanged'));
+            }
+            
             dragMode = 'create';
             dragStartX = clickX;
             dragStartY = clickY;
@@ -213,36 +232,37 @@ export function initInteraction(canvasEl) {
             const noteSecs = progress * loopDur;
             const qTime = Tone.Time(noteSecs).quantize("32n");
             
-            // Determine clicked track
-            let clickedTrackIndex = Math.floor((clickY - scrollY) / trackHeight);
-            if (clickedTrackIndex < 0) clickedTrackIndex = 0;
-            if (clickedTrackIndex >= state.tracks.length) clickedTrackIndex = state.tracks.length - 1;
+            let noteVal;
+            let scaleIndex = null;
             
-            const clickedTrack = state.tracks[clickedTrackIndex];
-            if (clickedTrack.id !== state.activeTrackId) {
-                state.activeTrackId = clickedTrack.id;
-                window.dispatchEvent(new CustomEvent('activeTrackChanged'));
+            if (clickedTrack.expanded) {
+                noteVal = yToNote(clickY, trackTop, trackHeight);
+                if (clickedTrack.type === 'drums') {
+                    const midi = Tone.Frequency(noteVal).toMidi();
+                    if (midi >= 40) noteVal = 'F#2'; // Hat
+                    else if (midi >= 37) noteVal = 'D2'; // Snare
+                    else noteVal = 'C2'; // Kick
+                }
+            } else {
+                const yWithinTrack = clickY - trackTop;
+                const yIndex = Math.floor(yWithinTrack / (trackHeight / 5));
+                scaleIndex = (5 - 1) - yIndex;
+                if (scaleIndex < 0) scaleIndex = 0;
+                if (scaleIndex > 4) scaleIndex = 4;
+                
+                const scale = getTrackScale(clickedTrack);
+                noteVal = scale[scaleIndex];
             }
-            
-            const trackTop = (clickedTrackIndex * trackHeight) + scrollY;
-            const yWithinTrack = clickY - trackTop;
-            
-            const yIndex = Math.floor(yWithinTrack / (trackHeight / 5));
-            let scaleIndex = (5 - 1) - yIndex;
-            if (scaleIndex < 0) scaleIndex = 0;
-            if (scaleIndex > 4) scaleIndex = 4;
-            
-            const scale = getTrackScale(clickedTrack);
-            let noteVal = scale[scaleIndex];
             
             dragNote = {
                 id: generateId(),
                 trackId: clickedTrack.id,
                 note: noteVal,
-                scaleIndex: scaleIndex,
                 time: Tone.Time(qTime).toBarsBeatsSixteenths(),
                 duration: "32n"
             };
+            if (scaleIndex !== null) dragNote.scaleIndex = scaleIndex;
+            
             state.notes.push(dragNote);
             syncAudioPart(state.notes);
             
@@ -260,12 +280,13 @@ export function initInteraction(canvasEl) {
         const currentX = e.clientX - rect.left;
         const currentY = e.clientY - rect.top;
         
+        const loopDur = LOOP_LENGTH_SECONDS();
         const scrollY = state.camera ? state.camera.scrollY : 0;
-        const trackHeight = 150;
+        const layout = getTrackLayout(state.tracks, scrollY);
         
-        const trackIndex = state.tracks.findIndex(t => t.id === dragNote.trackId);
-        if (trackIndex === -1) return;
-        const trackTop = (trackIndex * trackHeight) + scrollY;
+        const trackLayout = layout.find(l => l.track.id === dragNote.trackId);
+        if (!trackLayout) return;
+        const { track, top: trackTop, height: trackHeight } = trackLayout;
         
         if (dragMode === 'create' && activeTrack.type !== 'drums') {
             // Drag to draw length
@@ -281,25 +302,42 @@ export function initInteraction(canvasEl) {
         } else if (dragMode === 'move') {
             const oldNote = dragNote.note;
             
-            // Update time
-            const progress = currentX / canvasEl.width;
-            let noteSecs = progress * loopDur;
+            // Update time relatively to prevent jumping
+            const diffX = currentX - dragStartX;
+            const diffSecs = (diffX / canvasEl.width) * loopDur;
+            let noteSecs = dragStartNoteSecs + diffSecs;
+            
+            // Wrap around or clamp
             if (noteSecs < 0) noteSecs = 0;
             if (noteSecs >= loopDur) noteSecs = loopDur - 0.01;
+            
             const qTime = Tone.Time(noteSecs).quantize("32n");
             dragNote.time = Tone.Time(qTime).toBarsBeatsSixteenths();
             
-            const yWithinTrack = currentY - trackTop;
-            const yIndex = Math.floor(yWithinTrack / (trackHeight / 5));
-            let scaleIndex = (5 - 1) - yIndex;
-            if (scaleIndex < 0) scaleIndex = 0;
-            if (scaleIndex > 4) scaleIndex = 4;
-            
-            const scale = getTrackScale(activeTrack);
-            let newNoteVal = scale[scaleIndex];
+            // Update pitch
+            let newNoteVal;
+            if (track.expanded) {
+                newNoteVal = yToNote(currentY, trackTop, trackHeight);
+                if (track.type === 'drums') {
+                    const midi = Tone.Frequency(newNoteVal).toMidi();
+                    if (midi >= 40) newNoteVal = 'F#2';
+                    else if (midi >= 37) newNoteVal = 'D2';
+                    else newNoteVal = 'C2';
+                }
+                dragNote.scaleIndex = undefined; // Remove scale index since it's freeform now
+            } else {
+                const yWithinTrack = currentY - trackTop;
+                const yIndex = Math.floor(yWithinTrack / (trackHeight / 5));
+                let scaleIndex = (5 - 1) - yIndex;
+                if (scaleIndex < 0) scaleIndex = 0;
+                if (scaleIndex > 4) scaleIndex = 4;
+                
+                const scale = getTrackScale(activeTrack);
+                newNoteVal = scale[scaleIndex];
+                dragNote.scaleIndex = scaleIndex;
+            }
             
             dragNote.note = newNoteVal;
-            dragNote.scaleIndex = scaleIndex;
             
             if (oldNote !== newNoteVal) {
                 playSound(activeTrack.id, newNoteVal, undefined, "32n");
