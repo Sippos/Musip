@@ -51,6 +51,10 @@ export const state = {
     settings: {
         visualPulse: true,
         audioPulse: false
+    },
+    camera: {
+        scrollY: 0,
+        zoomY: 1.0
     }
 };
 

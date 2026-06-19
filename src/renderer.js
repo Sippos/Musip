@@ -109,7 +109,8 @@ function render(time) {
         const noteWidth = (durSecs / loopDur) * canvas.width;
         
         const noteY = noteToY(note.note, canvas.height);
-        const noteHeight = Math.max(4, canvas.height * 0.015);
+        const zoomY = state.camera ? state.camera.zoomY : 1.0;
+        const noteHeight = Math.max(4, canvas.height * 0.015 * zoomY);
         
         ctx.beginPath();
         // roundRect fallback just in case

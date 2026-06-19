@@ -113,6 +113,24 @@ export function initInteraction(canvasEl) {
     
     // Prevent context menu to allow right-click erasing
     canvasEl.addEventListener('contextmenu', e => e.preventDefault());
+    
+    // Zoom and Scroll
+    canvasEl.addEventListener('wheel', (e) => {
+        if (!state.isPlaying) return;
+        e.preventDefault(); // prevent actual page scroll
+        
+        if (e.ctrlKey || e.metaKey) {
+            // Zoom
+            const zoomDelta = e.deltaY * -0.01;
+            state.camera.zoomY = Math.max(0.5, Math.min(5.0, state.camera.zoomY + zoomDelta));
+        } else {
+            // Scroll
+            state.camera.scrollY -= e.deltaY;
+            // Limit scroll so we don't get lost
+            const maxScroll = canvasEl.height * state.camera.zoomY;
+            state.camera.scrollY = Math.max(-maxScroll, Math.min(maxScroll, state.camera.scrollY));
+        }
+    }, { passive: false });
 
     canvasEl.addEventListener('mousedown', (e) => {
         if (!state.isPlaying) return;
