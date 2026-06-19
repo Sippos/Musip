@@ -127,6 +127,17 @@ function renderTrackTabs() {
     });
 }
 
+const instrumentSelector = document.querySelector('.instrument-selector');
+if (instrumentSelector) {
+    instrumentSelector.addEventListener('wheel', (e) => {
+        // Only convert vertical scrolling (deltaY) to horizontal scrolling if there is no horizontal delta (deltaX)
+        if (e.deltaY !== 0 && e.deltaX === 0) {
+            e.preventDefault();
+            instrumentSelector.scrollLeft += e.deltaY;
+        }
+    });
+}
+
 addTrackBtn.addEventListener('click', () => {
     addTrackModal.classList.remove('hidden');
 });

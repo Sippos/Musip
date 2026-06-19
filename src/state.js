@@ -49,7 +49,7 @@ export const state = {
     notes: [], // { trackId, note, time, duration, id, scaleIndex }
     isPlaying: false,
     settings: {
-        visualPulse: true,
+        visualPulse: false,
         audioPulse: false
     },
     camera: {
