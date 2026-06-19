@@ -159,6 +159,8 @@ button:hover {
     background: transparent;
     transition: all 0.2s ease;
     border-radius: 2rem;
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .inst-btn.active {
