@@ -22,52 +22,56 @@ export function initExport(canvasEl) {
     }
     
     // Setup Export Button
-    document.getElementById('export-btn').addEventListener('click', async () => {
-        // Generate Share Link
-        const json = JSON.stringify(state.notes);
-        const b64 = btoa(json);
-        const newUrl = `${window.location.origin}${window.location.pathname}?beat=${b64}`;
+    let isRecording = false;
+    
+    document.getElementById('export-btn').addEventListener('click', async (e) => {
+        if (isRecording) return;
+        
+        if (!state.isPlaying) {
+            alert("Please make sure the session is playing before exporting!");
+            return;
+        }
+        
+        const btn = e.currentTarget;
+        const originalText = btn.textContent;
+        const originalBg = btn.style.backgroundColor;
+        const originalColor = btn.style.color;
+        
+        btn.textContent = 'Recording...';
+        btn.style.backgroundColor = '#ff7675';
+        btn.style.color = '#ffffff';
+        isRecording = true;
         
         try {
-            await navigator.clipboard.writeText(newUrl);
-            const notification = document.getElementById('share-notification');
-            notification.classList.remove('hidden');
-            notification.classList.add('show');
-            setTimeout(() => {
-                notification.classList.remove('show');
-                notification.classList.add('hidden');
-            }, 3000);
+            const audioModule = await import('./audio.js');
+            const masterRecorder = audioModule.masterRecorder;
+            const LOOP_LENGTH_SECONDS = audioModule.LOOP_LENGTH_SECONDS;
+            
+            // Start recording
+            masterRecorder.start();
+            
+            // Wait for exactly one loop duration
+            await new Promise(resolve => setTimeout(resolve, LOOP_LENGTH_SECONDS() * 1000));
+            
+            // Stop recording
+            const recording = await masterRecorder.stop();
+            
+            // Create a download link for the webm file
+            const url = URL.createObjectURL(recording);
+            const anchor = document.createElement('a');
+            anchor.download = 'musip-tape.webm';
+            anchor.href = url;
+            anchor.click();
+            URL.revokeObjectURL(url);
+            
         } catch (err) {
-            console.error('Failed to copy link', err);
+            console.error('Failed to record audio', err);
+            alert('Recording failed. Make sure audio is playing.');
+        } finally {
+            btn.textContent = originalText;
+            btn.style.backgroundColor = originalBg;
+            btn.style.color = originalColor;
+            isRecording = false;
         }
-        
-        // Bonus: Video Recording (if supported)
-        /*
-        if (canvasEl.captureStream && Tone.getDestination().context.createMediaStreamDestination) {
-            const dest = Tone.getDestination().context.createMediaStreamDestination();
-            Tone.getDestination().connect(dest);
-            
-            const canvasStream = canvasEl.captureStream(30);
-            const combinedStream = new MediaStream([
-                ...canvasStream.getVideoTracks(),
-                ...dest.stream.getAudioTracks()
-            ]);
-            
-            const recorder = new MediaRecorder(combinedStream);
-            const chunks = [];
-            recorder.ondataavailable = e => chunks.push(e.data);
-            recorder.onstop = () => {
-                const blob = new Blob(chunks, { type: 'video/webm' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'musip-tape.webm';
-                a.click();
-            };
-            
-            recorder.start();
-            setTimeout(() => recorder.stop(), 5000); // record 5 seconds
-        }
-        */
     });
 }

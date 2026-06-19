@@ -34,11 +34,11 @@ export function initInteraction(canvasEl) {
             
             // Quantize to nearest 16th note, wrapped in loop
             const now = Tone.Transport.seconds;
-            let qTime = Tone.Time(now).quantize("16n");
+            let qTime = Tone.Time(now).quantize("32n");
             
             // Start playing immediately for responsiveness
             if (activeTrack.type === 'drums') {
-                playSound(activeTrack.id, noteVal, undefined, "16n");
+                playSound(activeTrack.id, noteVal, undefined, "32n");
                 
                 // For drums, duration is fixed, save directly
                 state.notes.push({
@@ -47,7 +47,7 @@ export function initInteraction(canvasEl) {
                     note: noteVal,
                     scaleIndex: index,
                     time: Tone.Time(qTime).toBarsBeatsSixteenths(),
-                    duration: "16n"
+                    duration: "32n"
                 });
                 syncAudioPart(state.notes);
                 
@@ -84,10 +84,10 @@ export function initInteraction(canvasEl) {
                 instrumentsStop(activeTrack.id, press.noteVal);
                 
                 const now = Tone.Transport.seconds;
-                let qEndTime = Tone.Time(now).quantize("16n");
+                let qEndTime = Tone.Time(now).quantize("32n");
                 let duration = qEndTime - press.time;
                 
-                if (duration <= 0) duration = Tone.Time("16n").toSeconds();
+                if (duration <= 0) duration = Tone.Time("32n").toSeconds();
                 
                 state.notes.push({
                     id: generateId(),
@@ -157,7 +157,7 @@ export function initInteraction(canvasEl) {
             const noteHeight = Math.max(10, canvasEl.height * 0.05);
             
             return (clickX >= noteX && clickX <= noteX + noteWidth &&
-                    clickY >= noteY && clickY <= noteY + noteHeight);
+                    clickY >= noteY - 15 && clickY <= noteY + noteHeight + 15);
         });
         
         // Right Click: Erase
@@ -185,16 +185,17 @@ export function initInteraction(canvasEl) {
             
             const progress = clickX / canvasEl.width;
             const noteSecs = progress * loopDur;
-            const qTime = Tone.Time(noteSecs).quantize("16n");
+            const qTime = Tone.Time(noteSecs).quantize("32n");
             
             let noteVal;
             if (activeTrack.type === 'drums') {
-                const yIndex = Math.floor(clickY / (canvasEl.height / 5));
-                let scaleIndex = (5 - 1) - yIndex;
-                if (scaleIndex < 0) scaleIndex = 0;
-                if (scaleIndex >= 5) scaleIndex = 4;
-                const scale = getTrackScale(activeTrack);
-                noteVal = scale[scaleIndex];
+                if (clickY < canvasEl.height * 0.35) {
+                    noteVal = 'hat';
+                } else if (clickY < canvasEl.height * 0.65) {
+                    noteVal = 'snare';
+                } else {
+                    noteVal = 'kick';
+                }
             } else {
                 noteVal = yToNote(clickY, canvasEl.height);
             }
@@ -204,12 +205,12 @@ export function initInteraction(canvasEl) {
                 trackId: activeTrack.id,
                 note: noteVal,
                 time: Tone.Time(qTime).toBarsBeatsSixteenths(),
-                duration: "16n"
+                duration: "32n"
             };
             state.notes.push(dragNote);
             syncAudioPart(state.notes);
             
-            playSound(activeTrack.id, noteVal, undefined, "16n");
+            playSound(activeTrack.id, noteVal, undefined, "32n");
         }
     });
     
@@ -232,10 +233,10 @@ export function initInteraction(canvasEl) {
             const diffX = Math.max(0, currentX - dragStartX);
             const diffSecs = (diffX / canvasEl.width) * loopDur;
             
-            const minDur = Tone.Time("16n").toSeconds();
+            const minDur = Tone.Time("32n").toSeconds();
             let newDurSecs = Math.max(minDur, diffSecs);
-            let qDur = Tone.Time(newDurSecs).quantize("16n");
-            if (Tone.Time(qDur).toSeconds() <= 0) qDur = "16n";
+            let qDur = Tone.Time(newDurSecs).quantize("32n");
+            if (Tone.Time(qDur).toSeconds() <= 0) qDur = "32n";
             dragNote.duration = qDur;
             
         } else if (dragMode === 'move') {
@@ -246,24 +247,26 @@ export function initInteraction(canvasEl) {
             let noteSecs = progress * loopDur;
             if (noteSecs < 0) noteSecs = 0;
             if (noteSecs >= loopDur) noteSecs = loopDur - 0.01;
-            const qTime = Tone.Time(noteSecs).quantize("16n");
+            const qTime = Tone.Time(noteSecs).quantize("32n");
             dragNote.time = Tone.Time(qTime).toBarsBeatsSixteenths();
             
             // Update pitch
             let newNoteVal;
             if (activeTrack.type === 'drums') {
-                const yIndex = Math.floor(currentY / (canvasEl.height / 5));
-                let scaleIndex = (5 - 1) - yIndex;
-                if (scaleIndex < 0) scaleIndex = 0;
-                if (scaleIndex >= 5) scaleIndex = 4;
-                newNoteVal = getTrackScale(activeTrack)[scaleIndex];
+                if (currentY < canvasEl.height * 0.35) {
+                    newNoteVal = 'hat';
+                } else if (currentY < canvasEl.height * 0.65) {
+                    newNoteVal = 'snare';
+                } else {
+                    newNoteVal = 'kick';
+                }
             } else {
                 newNoteVal = yToNote(currentY, canvasEl.height);
             }
             dragNote.note = newNoteVal;
             
             if (oldNote !== newNoteVal) {
-                playSound(activeTrack.id, newNoteVal, undefined, "16n");
+                playSound(activeTrack.id, newNoteVal, undefined, "32n");
             }
         }
     });

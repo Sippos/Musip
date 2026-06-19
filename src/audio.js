@@ -26,7 +26,9 @@ const metronomeSynth = new Tone.MembraneSynth({
 metronomeSynth.volume.value = -10;
 
 export const masterAnalyser = new Tone.Analyser('waveform', 256);
+export const masterRecorder = new Tone.Recorder();
 Tone.Destination.connect(masterAnalyser);
+Tone.Destination.connect(masterRecorder);
 
 export async function initAudio() {
     await Tone.start();
