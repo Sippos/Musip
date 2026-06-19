@@ -9,6 +9,7 @@
     "build": "vite build"
   },
   "dependencies": {
+    "@tonejs/midi": "^2.0.28",
     "tone": "^15.0.4"
   },
   "devDependencies": {

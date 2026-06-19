@@ -3,6 +3,7 @@ import { initAudio, initTrackSynth } from './audio.js';
 import { initRenderer } from './renderer.js';
 import { initInteraction } from './interaction.js';
 import { initExport } from './export.js';
+import { importMidiFile } from './midiImport.js';
 import * as Tone from 'tone';
 
 const canvas = document.getElementById('sequencer');
@@ -313,3 +314,27 @@ savePresetBtn.addEventListener('click', () => {
 initRenderer(canvas);
 initInteraction(canvas);
 initExport(canvas);
+
+// Setup MIDI Import
+const importMidiBtn = document.getElementById('import-midi-btn');
+const midiUploadInput = document.getElementById('midi-upload');
+
+if (importMidiBtn && midiUploadInput) {
+    importMidiBtn.addEventListener('click', () => {
+        midiUploadInput.click();
+    });
+
+    midiUploadInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        try {
+            await Tone.start();
+            await importMidiFile(file, renderTrackTabs);
+            midiUploadInput.value = ''; // reset
+        } catch (err) {
+            console.error("Failed to parse MIDI:", err);
+            alert("Fehler beim Laden der MIDI-Datei.");
+        }
+    });
+}

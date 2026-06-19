@@ -1,6 +1,7 @@
 import { state, getActiveTrack } from './state.js';
 import * as Tone from 'tone';
 import { LOOP_LENGTH_SECONDS, masterAnalyser } from './audio.js';
+import { noteToY } from './pitchMap.js';
 
 let canvas, ctx;
 let bgLightness = 96;
@@ -106,10 +107,8 @@ function render(time) {
         const durSecs = Tone.Time(note.duration).toSeconds();
         const noteWidth = (durSecs / loopDur) * canvas.width;
         
-        // Reverse scale so highest pitch is at top (index 4 -> top)
-        const yIndex = (laneCount - 1) - note.scaleIndex;
-        const noteY = (yIndex * laneHeight) + (laneHeight * 0.25);
-        const noteHeight = laneHeight * 0.5;
+        const noteY = noteToY(note.note, canvas.height);
+        const noteHeight = Math.max(10, canvas.height * 0.05);
         
         ctx.beginPath();
         // roundRect fallback just in case

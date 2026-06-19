@@ -1,6 +1,7 @@
 import { state, generateId, getActiveTrack } from './state.js';
 import * as Tone from 'tone';
 import { getTrackScale, playSound, syncAudioPart, LOOP_LENGTH_SECONDS, instrumentsStart, instrumentsStop } from './audio.js';
+import { yToNote, noteToY } from './pitchMap.js';
 
 const keys = ['a', 's', 'd', 'f', 'g'];
 const activePresses = {};
@@ -134,9 +135,8 @@ export function initInteraction(canvasEl) {
             const durSecs = Tone.Time(note.duration).toSeconds();
             const noteWidth = (durSecs / loopDur) * canvasEl.width;
             
-            const yIndex = (laneCount - 1) - note.scaleIndex;
-            const noteY = (yIndex * laneHeight) + (laneHeight * 0.25);
-            const noteHeight = laneHeight * 0.5;
+            const noteY = noteToY(note.note, canvasEl.height);
+            const noteHeight = Math.max(10, canvasEl.height * 0.05);
             
             return (clickX >= noteX && clickX <= noteX + noteWidth &&
                     clickY >= noteY && clickY <= noteY + noteHeight);
@@ -169,19 +169,22 @@ export function initInteraction(canvasEl) {
             const noteSecs = progress * loopDur;
             const qTime = Tone.Time(noteSecs).quantize("16n");
             
-            const yIndex = Math.floor(clickY / laneHeight);
-            let scaleIndex = (laneCount - 1) - yIndex;
-            if (scaleIndex < 0) scaleIndex = 0;
-            if (scaleIndex >= laneCount) scaleIndex = laneCount - 1;
-            
-            const scale = getTrackScale(activeTrack);
-            const noteVal = scale[scaleIndex];
+            let noteVal;
+            if (activeTrack.type === 'drums') {
+                const yIndex = Math.floor(clickY / (canvasEl.height / 5));
+                let scaleIndex = (5 - 1) - yIndex;
+                if (scaleIndex < 0) scaleIndex = 0;
+                if (scaleIndex >= 5) scaleIndex = 4;
+                const scale = getTrackScale(activeTrack);
+                noteVal = scale[scaleIndex];
+            } else {
+                noteVal = yToNote(clickY, canvasEl.height);
+            }
             
             dragNote = {
                 id: generateId(),
                 trackId: activeTrack.id,
                 note: noteVal,
-                scaleIndex: scaleIndex,
                 time: Tone.Time(qTime).toBarsBeatsSixteenths(),
                 duration: "16n"
             };
@@ -218,7 +221,7 @@ export function initInteraction(canvasEl) {
             dragNote.duration = qDur;
             
         } else if (dragMode === 'move') {
-            const oldScaleIndex = dragNote.scaleIndex;
+            const oldNote = dragNote.note;
             
             // Update time
             const progress = currentX / canvasEl.width;
@@ -229,16 +232,19 @@ export function initInteraction(canvasEl) {
             dragNote.time = Tone.Time(qTime).toBarsBeatsSixteenths();
             
             // Update pitch
-            const yIndex = Math.floor(currentY / laneHeight);
-            let scaleIndex = (laneCount - 1) - yIndex;
-            if (scaleIndex < 0) scaleIndex = 0;
-            if (scaleIndex >= laneCount) scaleIndex = laneCount - 1;
-            
-            dragNote.scaleIndex = scaleIndex;
-            const newNoteVal = getTrackScale(activeTrack)[scaleIndex];
+            let newNoteVal;
+            if (activeTrack.type === 'drums') {
+                const yIndex = Math.floor(currentY / (canvasEl.height / 5));
+                let scaleIndex = (5 - 1) - yIndex;
+                if (scaleIndex < 0) scaleIndex = 0;
+                if (scaleIndex >= 5) scaleIndex = 4;
+                newNoteVal = getTrackScale(activeTrack)[scaleIndex];
+            } else {
+                newNoteVal = yToNote(currentY, canvasEl.height);
+            }
             dragNote.note = newNoteVal;
             
-            if (oldScaleIndex !== scaleIndex) {
+            if (oldNote !== newNoteVal) {
                 playSound(activeTrack.id, newNoteVal, undefined, "16n");
             }
         }

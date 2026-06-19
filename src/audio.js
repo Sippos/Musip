@@ -3,9 +3,15 @@ import { state, getPreset, getActiveTrack } from './state.js';
 
 export const trackSynths = {};
 
-// We will use a 2-measure loop
-export const LOOP_LENGTH_MEASURES = 2;
+// We will use a dynamic loop length
+export let LOOP_LENGTH_MEASURES = 2;
 export const LOOP_LENGTH_SECONDS = () => Tone.Time(`${LOOP_LENGTH_MEASURES}m`).toSeconds();
+
+export function setLoopLengthMeasures(measures) {
+    LOOP_LENGTH_MEASURES = measures;
+    Tone.Transport.loopEnd = `${measures}m`;
+    masterPart.loopEnd = `${measures}m`;
+}
 
 export const masterPart = new Tone.Part((time, noteValue) => {
     playSound(noteValue.trackId, noteValue.note, time, noteValue.duration);

@@ -31,18 +31,22 @@
         
         <div id="controls" class="hidden">
             <div class="controls-left">
-                <div class="instrument-selector" id="track-tabs">
-                    <!-- Rendered dynamically -->
+                <div class="instrument-selector">
+                    <div id="track-tabs" style="display: flex; gap: 0.5rem;">
+                        <!-- Rendered dynamically -->
+                    </div>
+                    <button id="add-track-btn" class="nav-icon" title="Add Track">
+                        <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    </button>
                 </div>
-                <button id="add-track-btn" class="nav-icon" title="Add Track">
-                    <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                </button>
                 <div class="divider"></div>
                 <button id="tweak-btn" class="secondary-btn">Tweak Sound</button>
             </div>
             
             <div class="controls-right">
                 <button id="undo-btn">Undo (Ctrl+Z)</button>
+                <input type="file" id="midi-upload" accept=".mid,.midi" style="display: none;">
+                <button id="import-midi-btn">Import MIDI</button>
                 <button id="export-btn">Export Tape</button>
             </div>
         </div>
