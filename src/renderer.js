@@ -51,7 +51,8 @@ function render(time) {
         bgLightness = Math.max(96, bgLightness - 0.1);
     }
     
-    ctx.fillStyle = `hsl(40, 33%, ${bgLightness}%)`;
+    const actualBgLightness = state.settings.visualPulse ? bgLightness : 96;
+    ctx.fillStyle = `hsl(40, 33%, ${actualBgLightness}%)`;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
     // Draw Living Waveform Background (Small, bottom middle)
