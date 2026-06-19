@@ -56,7 +56,7 @@ function render(time) {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
     // Draw Living Waveform Background (Small, bottom middle)
-    if (state.isPlaying && masterAnalyser) {
+    if (state.isPlaying && masterAnalyser && state.settings.visualPulse) {
         const values = masterAnalyser.getValue();
         ctx.beginPath();
         
