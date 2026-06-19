@@ -100,7 +100,12 @@ function render(time) {
         
         const isActive = note.trackId === state.activeTrackId;
         ctx.fillStyle = track.color;
-        ctx.globalAlpha = isActive ? 1.0 : 0.2;
+        if (track.muted) {
+            ctx.fillStyle = '#999999';
+            ctx.globalAlpha = isActive ? 0.3 : 0.05;
+        } else {
+            ctx.globalAlpha = isActive ? 1.0 : 0.2;
+        }
         
         const noteSecs = Tone.Time(note.time).toSeconds() % loopDur;
         const noteX = (noteSecs / loopDur) * canvas.width;

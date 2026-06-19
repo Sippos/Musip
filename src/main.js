@@ -48,9 +48,28 @@ function renderTrackTabs() {
     state.tracks.forEach(track => {
         const btn = document.createElement('button');
         btn.className = `inst-btn ${track.id === state.activeTrackId ? 'active' : ''}`;
-        btn.textContent = track.name;
+        btn.innerHTML = `
+            <span class="track-name">${track.name}</span>
+            <span class="mute-toggle" style="margin-left: 8px; opacity: 0.7; vertical-align: middle;">
+                ${track.muted ? 
+                    '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><line x1="1" y1="1" x2="23" y2="23"></line><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M23 9l-6 6"></path><path d="M17 9l6 6"></path></svg>' : 
+                    '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>'
+                }
+            </span>
+        `;
+        
         // Apply color hint to button border
         btn.style.borderBottom = `3px solid ${track.color}`;
+        if (track.muted) {
+            btn.style.opacity = '0.5';
+        }
+        
+        const muteToggle = btn.querySelector('.mute-toggle');
+        muteToggle.addEventListener('click', (e) => {
+            e.stopPropagation(); // prevent track selection
+            track.muted = !track.muted;
+            renderTrackTabs();
+        });
         
         btn.addEventListener('click', () => {
             state.activeTrackId = track.id;

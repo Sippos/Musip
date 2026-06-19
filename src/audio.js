@@ -111,6 +111,9 @@ export function getTrackScale(track) {
 }
 
 export function playSound(trackId, noteKey, time = Tone.now(), duration = "8n") {
+    const track = state.tracks.find(t => t.id === trackId);
+    if (track && track.muted) return;
+    
     const synth = trackSynths[trackId];
     if (!synth) return;
     
@@ -125,6 +128,9 @@ export function playSound(trackId, noteKey, time = Tone.now(), duration = "8n") 
 }
 
 export function instrumentsStart(trackId, noteVal) {
+    const track = state.tracks.find(t => t.id === trackId);
+    if (track && track.muted) return;
+    
     const synth = trackSynths[trackId];
     if (synth && synth.triggerAttack) {
         synth.triggerAttack(noteVal, Tone.now());
