@@ -20,43 +20,74 @@ export async function importMidiFile(file, renderTrackTabs) {
     const measures = Math.ceil(duration / (60 / 90 * 4));
     setLoopLengthMeasures(Math.max(2, measures));
     
-    midi.tracks.forEach((track, i) => {
-        if (track.notes.length === 0) return;
+    const activeMidiTracks = midi.tracks.filter(t => t.notes.length > 0);
+    
+    if (activeMidiTracks.length === 1 && !activeMidiTracks[0].instrument.percussion && activeMidiTracks[0].channel !== 9) {
+        // AUTO-SPLIT Single Track MIDI
+        const srcTrack = activeMidiTracks[0];
+        const lowId = `track-${generateId()}`;
+        const midId = `track-${generateId()}`;
+        const highId = `track-${generateId()}`;
         
-        const isDrums = track.instrument.percussion || track.channel === 9;
-        const trackId = `track-${generateId()}`;
+        state.tracks.push({ id: lowId, name: 'Bass (Auto-Split)', presetId: 'bass-square', color: colors[0], type: 'synth' });
+        state.tracks.push({ id: midId, name: 'Mid (Auto-Split)', presetId: 'keys-sine', color: colors[1], type: 'synth' });
+        state.tracks.push({ id: highId, name: 'Lead (Auto-Split)', presetId: 'keys-sine', color: colors[2], type: 'synth' });
         
-        state.tracks.push({
-            id: trackId,
-            name: track.name || (isDrums ? 'MIDI Drums' : `Track ${i+1}`),
-            presetId: isDrums ? 'drums-kit' : 'keys-sine',
-            color: colors[colorIdx % colors.length],
-            type: isDrums ? 'drums' : 'synth'
-        });
-        colorIdx++;
-        
-        track.notes.forEach(note => {
-            let noteStr = note.name;
-            if (isDrums) {
-                // simple mapping for standard GM drums
-                const midiPitch = note.midi;
-                if (midiPitch >= 35 && midiPitch <= 40) noteStr = 'kick';
-                else if (midiPitch >= 38 && midiPitch <= 40) noteStr = 'snare';
-                else if (midiPitch >= 41 && midiPitch <= 49) noteStr = 'snare'; // tom/clap etc mapped to snare
-                else noteStr = 'hat';
-            }
+        srcTrack.notes.forEach(note => {
+            let targetId;
+            if (note.midi < 48) targetId = lowId;      // Below C3
+            else if (note.midi <= 72) targetId = midId; // C3 to C5
+            else targetId = highId;                     // Above C5
             
             state.notes.push({
                 id: generateId(),
-                trackId: trackId,
-                note: noteStr,
-                time: note.time, // true seconds from MIDI
-                duration: Math.max(0.05, note.duration) // true duration
+                trackId: targetId,
+                note: note.name,
+                time: note.time,
+                duration: Math.max(0.05, note.duration)
             });
         });
         
-        initTrackSynth(trackId, getPreset(isDrums ? 'drums-kit' : 'keys-sine'));
-    });
+        initTrackSynth(lowId, getPreset('bass-square'));
+        initTrackSynth(midId, getPreset('keys-sine'));
+        initTrackSynth(highId, getPreset('keys-sine'));
+        
+    } else {
+        // STANDARD IMPORT
+        activeMidiTracks.forEach((track, i) => {
+            const isDrums = track.instrument.percussion || track.channel === 9;
+            const trackId = `track-${generateId()}`;
+            
+            state.tracks.push({
+                id: trackId,
+                name: track.name || (isDrums ? 'MIDI Drums' : `Track ${i+1}`),
+                presetId: isDrums ? 'drums-kit' : 'keys-sine',
+                color: colors[colorIdx % colors.length],
+                type: isDrums ? 'drums' : 'synth'
+            });
+            colorIdx++;
+            
+            track.notes.forEach(note => {
+                let noteStr = note.name;
+                if (isDrums) {
+                    const midiPitch = note.midi;
+                    if (midiPitch >= 35 && midiPitch <= 40) noteStr = 'kick';
+                    else if (midiPitch >= 41 && midiPitch <= 49) noteStr = 'snare';
+                    else noteStr = 'hat';
+                }
+                
+                state.notes.push({
+                    id: generateId(),
+                    trackId: trackId,
+                    note: noteStr,
+                    time: note.time,
+                    duration: Math.max(0.05, note.duration)
+                });
+            });
+            
+            initTrackSynth(trackId, getPreset(isDrums ? 'drums-kit' : 'keys-sine'));
+        });
+    }
     
     if (state.tracks.length > 0) {
         state.activeTrackId = state.tracks[0].id;
