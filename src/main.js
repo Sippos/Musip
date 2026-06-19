@@ -127,6 +127,18 @@ function renderTrackTabs() {
     });
 }
 
+window.addEventListener('activeTrackChanged', () => {
+    renderTrackTabs();
+    const activeTrack = getActiveTrack();
+    if (activeTrack && activeTrack.type === 'drums') {
+        tweakBtn.style.display = 'none';
+        tweakPanel.classList.add('hidden');
+    } else {
+        tweakBtn.style.display = 'inline-block';
+        updateTweakUI();
+    }
+});
+
 const instrumentSelector = document.querySelector('.instrument-selector');
 if (instrumentSelector) {
     instrumentSelector.addEventListener('wheel', (e) => {

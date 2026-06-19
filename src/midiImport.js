@@ -68,9 +68,9 @@ export async function importMidiFile(file, renderTrackTabs) {
                 let noteStr = note.name;
                 if (isDrums) {
                     const midiPitch = note.midi;
-                    if (midiPitch >= 35 && midiPitch <= 40) noteStr = 'kick';
-                    else if (midiPitch >= 41 && midiPitch <= 49) noteStr = 'snare';
-                    else noteStr = 'hat';
+                    if (midiPitch >= 35 && midiPitch <= 40) noteStr = 'C2';
+                    else if (midiPitch >= 41 && midiPitch <= 49) noteStr = 'D2';
+                    else noteStr = 'F#2';
                 }
                 
                 state.notes.push({

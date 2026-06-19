@@ -100,7 +100,7 @@ export function quantize(time) {
 
 export const scales = {
     synth: ["C2", "Eb2", "F2", "G2", "Bb2"], // Generic pentatonic, could be octaved based on track
-    drums: ["kick", "snare", "hat", "hat", "kick"] 
+    drums: ["C2", "D2", "F#2", "F#2", "C2"]
 };
 
 export function getTrackScale(track) {
@@ -121,9 +121,9 @@ export function playSound(trackId, noteKey, time = Tone.now(), duration = "8n") 
     
     // Check if it's drums
     if (synth.kick) {
-        if (noteKey === "kick") synth.kick.triggerAttackRelease("C1", "8n", time);
-        else if (noteKey === "snare") synth.snare.triggerAttackRelease("16n", time);
-        else if (noteKey === "hat") synth.hat.triggerAttackRelease("32n", time);
+        if (noteKey === "C2" || noteKey === "kick") synth.kick.triggerAttackRelease("C1", "8n", time);
+        else if (noteKey === "D2" || noteKey === "snare") synth.snare.triggerAttackRelease("16n", time);
+        else if (noteKey === "F#2" || noteKey === "Gb2" || noteKey === "hat") synth.hat.triggerAttackRelease("32n", time);
     } else {
         synth.triggerAttackRelease(noteKey, duration, time);
     }

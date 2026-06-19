@@ -1,7 +1,7 @@
 import { state, generateId, getActiveTrack } from './state.js';
 import * as Tone from 'tone';
 import { getTrackScale, playSound, syncAudioPart, LOOP_LENGTH_SECONDS, instrumentsStart, instrumentsStop } from './audio.js';
-import { yToNote, noteToY } from './pitchMap.js';
+import { noteToY } from './pitchMap.js';
 
 const keys = ['a', 's', 'd', 'f', 'g'];
 const activePresses = {};
@@ -113,24 +113,6 @@ export function initInteraction(canvasEl) {
     
     // Prevent context menu to allow right-click erasing
     canvasEl.addEventListener('contextmenu', e => e.preventDefault());
-    
-    // Zoom and Scroll
-    canvasEl.addEventListener('wheel', (e) => {
-        if (!state.isPlaying) return;
-        e.preventDefault(); // prevent actual page scroll
-        
-        if (e.ctrlKey || e.metaKey) {
-            // Zoom
-            const zoomDelta = e.deltaY * -0.01;
-            state.camera.zoomY = Math.max(0.5, Math.min(5.0, state.camera.zoomY + zoomDelta));
-        } else {
-            // Scroll
-            state.camera.scrollY -= e.deltaY;
-            // Limit scroll so we don't get lost
-            const maxScroll = canvasEl.height * state.camera.zoomY;
-            state.camera.scrollY = Math.max(-maxScroll, Math.min(maxScroll, state.camera.scrollY));
-        }
-    }, { passive: false });
 
     canvasEl.addEventListener('mousedown', (e) => {
         if (!state.isPlaying) return;
@@ -146,19 +128,43 @@ export function initInteraction(canvasEl) {
         const laneCount = 5;
         const laneHeight = canvasEl.height / laneCount;
         
-        const noteIndex = state.notes.findIndex(note => {
-            if (note.trackId !== activeTrack.id) return false;
-            const noteSecs = Tone.Time(note.time).toSeconds() % loopDur;
+        const hitTest = (n) => {
+            const noteSecs = Tone.Time(n.time).toSeconds() % loopDur;
             const noteX = (noteSecs / loopDur) * canvasEl.width;
-            const durSecs = Tone.Time(note.duration).toSeconds();
+            const durSecs = Tone.Time(n.duration).toSeconds();
             const noteWidth = (durSecs / loopDur) * canvasEl.width;
             
-            const noteY = noteToY(note.note, canvasEl.height);
-            const noteHeight = Math.max(10, canvasEl.height * 0.05);
+            const noteY = noteToY(n, canvasEl.height);
+            // Use visual height for hit detection: thick for scale notes, thin for MIDI
+            const isScaleNote = n.scaleIndex !== undefined && n.scaleIndex !== null;
+            const noteHeight = isScaleNote ? (canvasEl.height / 5) * 0.8 : Math.max(4, canvasEl.height * 0.015);
+            const halfHeight = noteHeight / 2;
             
             return (clickX >= noteX && clickX <= noteX + noteWidth &&
-                    clickY >= noteY - 15 && clickY <= noteY + noteHeight + 15);
-        });
+                    clickY >= noteY - halfHeight - 4 && 
+                    clickY <= noteY + halfHeight + 4);
+        };
+        
+        let targetNoteIndex = -1;
+        // First try to hit a note in the active track
+        for (let i = state.notes.length - 1; i >= 0; i--) {
+            if (state.notes[i].trackId === state.activeTrackId && hitTest(state.notes[i])) {
+                targetNoteIndex = i;
+                break;
+            }
+        }
+        // If not found, try other tracks (but only if they are not muted)
+        if (targetNoteIndex === -1) {
+            for (let i = state.notes.length - 1; i >= 0; i--) {
+                const track = state.tracks.find(t => t.id === state.notes[i].trackId);
+                if (state.notes[i].trackId !== state.activeTrackId && track && !track.muted && hitTest(state.notes[i])) {
+                    targetNoteIndex = i;
+                    break;
+                }
+            }
+        }
+        
+        const noteIndex = targetNoteIndex;
         
         // Right Click: Erase
         if (e.button === 2) {
@@ -178,6 +184,11 @@ export function initInteraction(canvasEl) {
             dragNoteIndex = noteIndex;
             dragStartX = clickX;
             dragStartY = clickY;
+            
+            if (dragNote.trackId !== state.activeTrackId) {
+                state.activeTrackId = dragNote.trackId;
+                window.dispatchEvent(new CustomEvent('activeTrackChanged'));
+            }
         } else {
             dragMode = 'create';
             dragStartX = clickX;
@@ -190,7 +201,7 @@ export function initInteraction(canvasEl) {
             const yIndex = Math.floor(clickY / (canvasEl.height / 5));
             let scaleIndex = (5 - 1) - yIndex;
             if (scaleIndex < 0) scaleIndex = 0;
-            if (scaleIndex >= 5) scaleIndex = 4;
+            if (scaleIndex > 4) scaleIndex = 4;
             
             const scale = getTrackScale(activeTrack);
             let noteVal = scale[scaleIndex];
@@ -246,15 +257,16 @@ export function initInteraction(canvasEl) {
             const qTime = Tone.Time(noteSecs).quantize("32n");
             dragNote.time = Tone.Time(qTime).toBarsBeatsSixteenths();
             
-            // Update pitch
             const yIndex = Math.floor(currentY / (canvasEl.height / 5));
             let scaleIndex = (5 - 1) - yIndex;
             if (scaleIndex < 0) scaleIndex = 0;
-            if (scaleIndex >= 5) scaleIndex = 4;
+            if (scaleIndex > 4) scaleIndex = 4;
             
-            newNoteVal = getTrackScale(activeTrack)[scaleIndex];
-            dragNote.scaleIndex = scaleIndex;
+            const scale = getTrackScale(activeTrack);
+            let newNoteVal = scale[scaleIndex];
+            
             dragNote.note = newNoteVal;
+            dragNote.scaleIndex = scaleIndex;
             
             if (oldNote !== newNoteVal) {
                 playSound(activeTrack.id, newNoteVal, undefined, "32n");
@@ -264,13 +276,6 @@ export function initInteraction(canvasEl) {
     
     window.addEventListener('mouseup', (e) => {
         if (dragMode) {
-            if (dragMode === 'move') {
-                const diffX = Math.abs(e.clientX - dragStartX);
-                const diffY = Math.abs(e.clientY - dragStartY);
-                if (diffX < 5 && diffY < 5) {
-                    state.notes.splice(dragNoteIndex, 1);
-                }
-            }
             syncAudioPart(state.notes);
             dragMode = null;
             dragNote = null;

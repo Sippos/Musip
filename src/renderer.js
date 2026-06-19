@@ -114,8 +114,9 @@ function render(time) {
         const noteWidth = (durSecs / loopDur) * canvas.width;
         
         const noteY = noteToY(note, canvas.height);
+        const isScaleNote = note.scaleIndex !== undefined && note.scaleIndex !== null;
         const zoomY = state.camera ? state.camera.zoomY : 1.0;
-        const noteHeight = Math.max(4, canvas.height * 0.015 * zoomY);
+        const noteHeight = isScaleNote ? (canvas.height / 5) * 0.8 : Math.max(4, canvas.height * 0.015 * zoomY);
         
         ctx.beginPath();
         if (ctx.roundRect) {
