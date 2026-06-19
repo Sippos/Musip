@@ -1,5 +1,5 @@
 import { state, generateId, getActiveTrack, saveUserPreset, getPreset } from './state.js';
-import { initAudio, initTrackSynth } from './audio.js';
+import { initAudio, initTrackSynth, LOOP_LENGTH_SECONDS } from './audio.js';
 import { initRenderer } from './renderer.js';
 import { initInteraction } from './interaction.js';
 import { initExport } from './export.js';
@@ -50,7 +50,13 @@ function renderTrackTabs() {
         btn.className = `inst-btn ${track.id === state.activeTrackId ? 'active' : ''}`;
         btn.innerHTML = `
             <span class="track-name">${track.name}</span>
-            <span class="expand-toggle" style="margin-left: 8px; opacity: 0.7; vertical-align: middle;" title="Expand/Collapse Piano Roll">
+            <span class="shift-left" style="margin-left: 8px; opacity: 0.7; vertical-align: middle; cursor: pointer;" title="Shift Left 1 Beat">
+                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            </span>
+            <span class="shift-right" style="margin-left: 2px; opacity: 0.7; vertical-align: middle; cursor: pointer;" title="Shift Right 1 Beat">
+                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </span>
+            <span class="expand-toggle" style="margin-left: 8px; opacity: 0.7; vertical-align: middle; cursor: pointer;" title="Expand/Collapse Piano Roll">
                 ${track.expanded ? 
                     '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><polyline points="4 14 12 6 20 14"></polyline></svg>' : 
                     '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><polyline points="6 9 12 15 18 9"></polyline></svg>'
@@ -78,6 +84,36 @@ function renderTrackTabs() {
             e.stopPropagation(); // prevent track selection
             track.expanded = !track.expanded;
             renderTrackTabs();
+        });
+        
+        const shiftLeft = btn.querySelector('.shift-left');
+        shiftLeft.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const shiftSecs = Tone.Time("4n").toSeconds();
+            const loopDur = LOOP_LENGTH_SECONDS();
+            state.notes.forEach(n => {
+                if (n.trackId === track.id) {
+                    let secs = Tone.Time(n.time).toSeconds() - shiftSecs;
+                    if (secs < 0) secs += loopDur;
+                    n.time = Tone.Time(secs).quantize("32n");
+                }
+            });
+            import('./audio.js').then(module => module.syncAudioPart(state.notes));
+        });
+        
+        const shiftRight = btn.querySelector('.shift-right');
+        shiftRight.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const shiftSecs = Tone.Time("4n").toSeconds();
+            const loopDur = LOOP_LENGTH_SECONDS();
+            state.notes.forEach(n => {
+                if (n.trackId === track.id) {
+                    let secs = Tone.Time(n.time).toSeconds() + shiftSecs;
+                    if (secs >= loopDur) secs -= loopDur;
+                    n.time = Tone.Time(secs).quantize("32n");
+                }
+            });
+            import('./audio.js').then(module => module.syncAudioPart(state.notes));
         });
         
         const muteToggle = btn.querySelector('.mute-toggle');

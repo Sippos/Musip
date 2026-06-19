@@ -20,6 +20,15 @@ export async function importMidiFile(file, renderTrackTabs) {
     
     const activeMidiTracks = midi.tracks.filter(t => t.notes.length > 0);
     
+    // Find the global start time to strip leading silence
+    let minTime = Infinity;
+    activeMidiTracks.forEach(track => {
+        track.notes.forEach(note => {
+            if (note.time < minTime) minTime = note.time;
+        });
+    });
+    if (minTime === Infinity) minTime = 0;
+    
     if (activeMidiTracks.length === 1 && !activeMidiTracks[0].instrument.percussion && activeMidiTracks[0].channel !== 9) {
         // AUTO-SPLIT Single Track MIDI
         const srcTrack = activeMidiTracks[0];
@@ -38,7 +47,7 @@ export async function importMidiFile(file, renderTrackTabs) {
                     id: generateId(),
                     trackId: trackId,
                     note: note.name,
-                    time: note.time,
+                    time: Math.max(0, note.time - minTime),
                     duration: Math.max(0.05, note.duration)
                 });
             });
@@ -79,7 +88,7 @@ export async function importMidiFile(file, renderTrackTabs) {
                     id: generateId(),
                     trackId: trackId,
                     note: noteStr,
-                    time: note.time,
+                    time: Math.max(0, note.time - minTime),
                     duration: Math.max(0.05, note.duration)
                 });
             });
