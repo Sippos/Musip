@@ -1,24 +1,22 @@
 import { Midi } from '@tonejs/midi';
 import { state, generateId } from './state.js';
-import { setLoopLengthMeasures, syncAudioPart, initTrackSynth } from './audio.js';
+import { setLoopLengthMeasures, syncAudioPart, initTrackSynth, LOOP_LENGTH_MEASURES } from './audio.js';
 import { getPreset } from './state.js';
 
 export async function importMidiFile(file, renderTrackTabs) {
     const arrayBuffer = await file.arrayBuffer();
     const midi = new Midi(arrayBuffer);
     
-    // Clear existing
-    state.tracks = [];
-    state.notes = [];
+    const newTracksStartIdx = state.tracks.length;
     
     const colors = ['#A8E6CF', '#FFD3B6', '#FFAAA5', '#D4A5FF', '#A5D8FF'];
-    let colorIdx = 0;
+    let colorIdx = state.tracks.length; // stagger colors based on existing tracks
     
     // Find length in seconds
     const duration = midi.duration;
     // Estimate measures based on 90 bpm -> 1 beat = 60/90 = 0.666s. 1 measure = 4 beats = 2.666s
     const measures = Math.ceil(duration / (60 / 90 * 4));
-    setLoopLengthMeasures(Math.max(2, measures));
+    setLoopLengthMeasures(Math.max(LOOP_LENGTH_MEASURES || 2, measures));
     
     const activeMidiTracks = midi.tracks.filter(t => t.notes.length > 0);
     
@@ -89,9 +87,9 @@ export async function importMidiFile(file, renderTrackTabs) {
         });
     }
     
-    if (state.tracks.length > 0) {
-        state.activeTrackId = state.tracks[0].id;
-    } else {
+    if (state.tracks.length > newTracksStartIdx) {
+        state.activeTrackId = state.tracks[newTracksStartIdx].id; // Select the first newly added track
+    } else if (state.tracks.length === 0) {
         // Fallback if empty
         state.tracks.push({ id: 'track-1', name: 'Bass', presetId: 'bass-square', color: '#A8E6CF', type: 'synth' });
         state.activeTrackId = 'track-1';
