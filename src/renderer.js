@@ -90,13 +90,47 @@ function render(time) {
     const currentSecs = (Tone.Transport.seconds % loopDur);
     const playheadX = (currentSecs / loopDur) * canvas.width;
     
-    // Draw notes
-    const laneCount = 5;
-    const laneHeight = canvas.height / laneCount;
+    const trackHeight = 150;
+    const scrollY = state.camera ? state.camera.scrollY : 0;
     
+    // Draw track backgrounds and dividers
+    state.tracks.forEach((track, index) => {
+        const trackTop = (index * trackHeight) + scrollY;
+        
+        // Active track highlight
+        ctx.fillStyle = track.id === state.activeTrackId ? 'rgba(0,0,0,0.03)' : 'transparent';
+        ctx.fillRect(0, trackTop, canvas.width, trackHeight);
+        
+        // Draw 5 lane dividers within the track
+        ctx.strokeStyle = 'rgba(0,0,0,0.03)';
+        ctx.lineWidth = 1;
+        for (let i = 1; i < 5; i++) {
+            const laneY = trackTop + (i * (trackHeight / 5));
+            ctx.beginPath();
+            ctx.moveTo(0, laneY);
+            ctx.lineTo(canvas.width, laneY);
+            ctx.stroke();
+        }
+        
+        // Track divider
+        ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, trackTop + trackHeight);
+        ctx.lineTo(canvas.width, trackTop + trackHeight);
+        ctx.stroke();
+    });
+    
+    // Draw notes
     state.notes.forEach(note => {
-        const track = state.tracks.find(t => t.id === note.trackId);
-        if (!track) return;
+        const trackIndex = state.tracks.findIndex(t => t.id === note.trackId);
+        if (trackIndex === -1) return;
+        const track = state.tracks[trackIndex];
+        
+        const trackTop = (trackIndex * trackHeight) + scrollY;
+        
+        // Don't draw notes if they are scrolled off screen
+        if (trackTop > canvas.height || trackTop + trackHeight < 0) return;
         
         const isActive = note.trackId === state.activeTrackId;
         ctx.fillStyle = track.color;
@@ -104,7 +138,7 @@ function render(time) {
             ctx.fillStyle = '#999999';
             ctx.globalAlpha = isActive ? 0.3 : 0.05;
         } else {
-            ctx.globalAlpha = isActive ? 1.0 : 0.2;
+            ctx.globalAlpha = isActive ? 1.0 : 0.5; // Inactive tracks are more visible now since they don't overlap
         }
         
         const noteSecs = Tone.Time(note.time).toSeconds() % loopDur;
@@ -113,10 +147,9 @@ function render(time) {
         const durSecs = Tone.Time(note.duration).toSeconds();
         const noteWidth = (durSecs / loopDur) * canvas.width;
         
-        const noteY = noteToY(note, canvas.height);
-        const isScaleNote = note.scaleIndex !== undefined && note.scaleIndex !== null;
-        const zoomY = state.camera ? state.camera.zoomY : 1.0;
-        const noteHeight = isScaleNote ? (canvas.height / 5) * 0.8 : Math.max(4, canvas.height * 0.015 * zoomY);
+        const noteY = noteToY(note, trackTop, trackHeight);
+        const laneHeight = trackHeight / 5;
+        const noteHeight = laneHeight * 0.8;
         
         ctx.beginPath();
         if (ctx.roundRect) {
@@ -129,18 +162,8 @@ function render(time) {
     ctx.globalAlpha = 1.0;
     
     // Playhead
-    ctx.fillStyle = 'rgba(0,0,0,0.1)';
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
     ctx.fillRect(playheadX, 0, 2, canvas.height);
-    
-    // Active key feedback at bottom
-    const activeTrack = getActiveTrack();
-    if (activeTrack && state.activeKeyIndex !== null && state.activeKeyIndex !== undefined) {
-        const laneWidth = canvas.width / laneCount;
-        ctx.fillStyle = activeTrack.color;
-        ctx.globalAlpha = 0.5;
-        ctx.fillRect(state.activeKeyIndex * laneWidth, canvas.height - 20, laneWidth, 20);
-        ctx.globalAlpha = 1.0;
-    }
     
     // Draw pulsating frame for the Takt
     if (state.settings.visualPulse && beatPulse > 0) {

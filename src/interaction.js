@@ -113,6 +113,18 @@ export function initInteraction(canvasEl) {
     
     // Prevent context menu to allow right-click erasing
     canvasEl.addEventListener('contextmenu', e => e.preventDefault());
+    
+    const trackHeight = 150;
+
+    // Scroll
+    canvasEl.addEventListener('wheel', (e) => {
+        if (!state.isPlaying) return;
+        e.preventDefault(); // prevent actual page scroll
+        
+        state.camera.scrollY -= e.deltaY;
+        const maxScroll = Math.max(0, (state.tracks.length * trackHeight) - canvasEl.height);
+        state.camera.scrollY = Math.max(-maxScroll, Math.min(0, state.camera.scrollY));
+    }, { passive: false });
 
     canvasEl.addEventListener('mousedown', (e) => {
         if (!state.isPlaying) return;
@@ -125,19 +137,22 @@ export function initInteraction(canvasEl) {
         const clickY = e.clientY - rect.top;
         
         const loopDur = LOOP_LENGTH_SECONDS();
-        const laneCount = 5;
-        const laneHeight = canvasEl.height / laneCount;
+        const scrollY = state.camera ? state.camera.scrollY : 0;
         
         const hitTest = (n) => {
+            const trackIndex = state.tracks.findIndex(t => t.id === n.trackId);
+            if (trackIndex === -1) return false;
+            
+            const trackTop = (trackIndex * trackHeight) + scrollY;
+            
             const noteSecs = Tone.Time(n.time).toSeconds() % loopDur;
             const noteX = (noteSecs / loopDur) * canvasEl.width;
             const durSecs = Tone.Time(n.duration).toSeconds();
             const noteWidth = (durSecs / loopDur) * canvasEl.width;
             
-            const noteY = noteToY(n, canvasEl.height);
-            // Use visual height for hit detection: thick for scale notes, thin for MIDI
-            const isScaleNote = n.scaleIndex !== undefined && n.scaleIndex !== null;
-            const noteHeight = isScaleNote ? (canvasEl.height / 5) * 0.8 : Math.max(4, canvasEl.height * 0.015);
+            const noteY = noteToY(n, trackTop, trackHeight);
+            const laneHeight = trackHeight / 5;
+            const noteHeight = laneHeight * 0.8;
             const halfHeight = noteHeight / 2;
             
             return (clickX >= noteX && clickX <= noteX + noteWidth &&
@@ -198,17 +213,31 @@ export function initInteraction(canvasEl) {
             const noteSecs = progress * loopDur;
             const qTime = Tone.Time(noteSecs).quantize("32n");
             
-            const yIndex = Math.floor(clickY / (canvasEl.height / 5));
+            // Determine clicked track
+            let clickedTrackIndex = Math.floor((clickY - scrollY) / trackHeight);
+            if (clickedTrackIndex < 0) clickedTrackIndex = 0;
+            if (clickedTrackIndex >= state.tracks.length) clickedTrackIndex = state.tracks.length - 1;
+            
+            const clickedTrack = state.tracks[clickedTrackIndex];
+            if (clickedTrack.id !== state.activeTrackId) {
+                state.activeTrackId = clickedTrack.id;
+                window.dispatchEvent(new CustomEvent('activeTrackChanged'));
+            }
+            
+            const trackTop = (clickedTrackIndex * trackHeight) + scrollY;
+            const yWithinTrack = clickY - trackTop;
+            
+            const yIndex = Math.floor(yWithinTrack / (trackHeight / 5));
             let scaleIndex = (5 - 1) - yIndex;
             if (scaleIndex < 0) scaleIndex = 0;
             if (scaleIndex > 4) scaleIndex = 4;
             
-            const scale = getTrackScale(activeTrack);
+            const scale = getTrackScale(clickedTrack);
             let noteVal = scale[scaleIndex];
             
             dragNote = {
                 id: generateId(),
-                trackId: activeTrack.id,
+                trackId: clickedTrack.id,
                 note: noteVal,
                 scaleIndex: scaleIndex,
                 time: Tone.Time(qTime).toBarsBeatsSixteenths(),
@@ -217,7 +246,7 @@ export function initInteraction(canvasEl) {
             state.notes.push(dragNote);
             syncAudioPart(state.notes);
             
-            playSound(activeTrack.id, noteVal, undefined, "32n");
+            playSound(clickedTrack.id, noteVal, undefined, "32n");
         }
     });
     
@@ -231,9 +260,12 @@ export function initInteraction(canvasEl) {
         const currentX = e.clientX - rect.left;
         const currentY = e.clientY - rect.top;
         
-        const loopDur = LOOP_LENGTH_SECONDS();
-        const laneCount = 5;
-        const laneHeight = canvasEl.height / laneCount;
+        const scrollY = state.camera ? state.camera.scrollY : 0;
+        const trackHeight = 150;
+        
+        const trackIndex = state.tracks.findIndex(t => t.id === dragNote.trackId);
+        if (trackIndex === -1) return;
+        const trackTop = (trackIndex * trackHeight) + scrollY;
         
         if (dragMode === 'create' && activeTrack.type !== 'drums') {
             // Drag to draw length
@@ -257,7 +289,8 @@ export function initInteraction(canvasEl) {
             const qTime = Tone.Time(noteSecs).quantize("32n");
             dragNote.time = Tone.Time(qTime).toBarsBeatsSixteenths();
             
-            const yIndex = Math.floor(currentY / (canvasEl.height / 5));
+            const yWithinTrack = currentY - trackTop;
+            const yIndex = Math.floor(yWithinTrack / (trackHeight / 5));
             let scaleIndex = (5 - 1) - yIndex;
             if (scaleIndex < 0) scaleIndex = 0;
             if (scaleIndex > 4) scaleIndex = 4;
