@@ -4,14 +4,20 @@ export const defaultPresets = {
         type: 'synth',
         oscillator: 'square',
         attack: 0.05,
-        release: 1.5
+        release: 1.5,
+        brightness: 0.4,
+        space: 0.1,
+        dirt: 0.3
     },
     'keys-sine': {
         name: 'Sine Keys',
         type: 'synth',
         oscillator: 'sine',
         attack: 0.1,
-        release: 2.0
+        release: 2.0,
+        brightness: 0.8,
+        space: 0.4,
+        dirt: 0.0
     },
     'drums-kit': {
         name: 'Standard Kit',

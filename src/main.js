@@ -29,6 +29,12 @@ const magicDot = document.getElementById('magic-dot');
 const tweakWaveCanvas = document.getElementById('tweak-wave-canvas');
 const savePresetBtn = document.getElementById('save-preset-btn');
 
+const brightnessSlider = document.getElementById('brightness-slider');
+const spaceSlider = document.getElementById('space-slider');
+const dirtSlider = document.getElementById('dirt-slider');
+
+
+
 startBtn.addEventListener('click', async () => {
     await initAudio();
     state.isPlaying = true;
@@ -298,6 +304,10 @@ function updateTweakUI() {
         magicDot.style.left = `${px * 100}%`;
         magicDot.style.top = `${py * 100}%`;
         
+        brightnessSlider.value = params.brightness !== undefined ? params.brightness : 1.0;
+        spaceSlider.value = params.space || 0;
+        dirtSlider.value = params.dirt || 0;
+        
         drawTweakWave(params.oscillator, params.attack, params.release);
     });
 }
@@ -349,9 +359,44 @@ function drawTweakWave(oscillator, attack, release) {
     ctx.stroke();
 }
 
-// Magic Pad Interaction
+// Magic Pad & Sliders Interaction
 let isDraggingPad = false;
 let padPreviewTimeout = null;
+
+tweakWaveCanvas.addEventListener('click', () => {
+    import('./audio.js').then(module => {
+        const params = module.getInstrumentParams(state.activeTrackId);
+        if (!params) return;
+        
+        const oscs = ['sine', 'triangle', 'square', 'sawtooth'];
+        let idx = oscs.indexOf(params.oscillator);
+        idx = (idx + 1) % oscs.length;
+        const newOsc = oscs[idx];
+        
+        module.updateInstrumentParams(state.activeTrackId, { oscillator: newOsc });
+        module.playSound(state.activeTrackId, "C3", undefined, "16n");
+        updateTweakUI();
+    });
+});
+
+[
+    { el: brightnessSlider, param: 'brightness' },
+    { el: spaceSlider, param: 'space' },
+    { el: dirtSlider, param: 'dirt' }
+].forEach(({el, param}) => {
+    if (!el) return;
+    el.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        import('./audio.js').then(module => {
+            module.updateInstrumentParams(state.activeTrackId, { [param]: val });
+            
+            if (!padPreviewTimeout) {
+                module.playSound(state.activeTrackId, "C3", undefined, "16n");
+                padPreviewTimeout = setTimeout(() => padPreviewTimeout = null, 150);
+            }
+        });
+    });
+});
 
 function handlePadMove(e) {
     if (!isDraggingPad) return;

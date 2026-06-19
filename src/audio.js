@@ -2,6 +2,7 @@ import * as Tone from 'tone';
 import { state, getPreset, getActiveTrack } from './state.js';
 
 export const trackSynths = {};
+export const trackEffects = {};
 
 // We will use a dynamic loop length
 export let LOOP_LENGTH_MEASURES = 2;
@@ -63,6 +64,11 @@ export function initTrackSynth(trackId, preset) {
             if(trackSynths[trackId].hat) trackSynths[trackId].hat.dispose();
         }
     }
+    if (trackEffects[trackId]) {
+        trackEffects[trackId].filter.dispose();
+        trackEffects[trackId].distortion.dispose();
+        trackEffects[trackId].reverb.dispose();
+    }
 
     if (preset.type === 'drums') {
         trackSynths[trackId] = {
@@ -78,12 +84,29 @@ export function initTrackSynth(trackId, preset) {
         };
         trackSynths[trackId].kick.volume.value = 5;
     } else {
+        const filter = new Tone.Filter(20000, "lowpass");
+        const distortion = new Tone.Distortion(0);
+        const reverb = new Tone.Freeverb({ roomSize: 0.8, dampening: 3000 });
+        
+        filter.connect(distortion);
+        distortion.connect(reverb);
+        reverb.toDestination();
+        
+        trackEffects[trackId] = { filter, distortion, reverb };
+        
         const synth = new Tone.PolySynth(Tone.Synth, {
-            oscillator: { type: preset.oscillator },
-            envelope: { attack: preset.attack, release: preset.release }
-        }).toDestination();
+            oscillator: { type: preset.oscillator || 'sine' },
+            envelope: { attack: preset.attack || 0.1, release: preset.release || 1.0 }
+        }).connect(filter);
         synth.volume.value = -5;
         trackSynths[trackId] = synth;
+        
+        // Apply initial effects
+        updateInstrumentParams(trackId, {
+            brightness: preset.brightness !== undefined ? preset.brightness : 1.0,
+            space: preset.space || 0,
+            dirt: preset.dirt || 0
+        });
     }
 }
 
@@ -159,6 +182,21 @@ export function updateInstrumentParams(trackId, params) {
     if (params.release !== undefined) {
         synth.set({ envelope: { release: params.release } });
     }
+    
+    const effects = trackEffects[trackId];
+    if (effects) {
+        if (params.brightness !== undefined) {
+            // Map 0-1 to 200Hz - 20000Hz exponentially
+            const freq = 200 * Math.pow(100, params.brightness);
+            effects.filter.frequency.value = freq;
+        }
+        if (params.space !== undefined) {
+            effects.reverb.wet.value = params.space;
+        }
+        if (params.dirt !== undefined) {
+            effects.distortion.distortion = params.dirt;
+        }
+    }
 }
 
 export function getInstrumentParams(trackId) {
@@ -166,9 +204,25 @@ export function getInstrumentParams(trackId) {
     if (!synth || synth.kick) return null;
     
     const options = synth.get();
+    const effects = trackEffects[trackId];
+    
+    let brightness = 1.0;
+    let space = 0.0;
+    let dirt = 0.0;
+    
+    if (effects) {
+        // Reverse map freq to brightness: freq = 200 * 100^b => b = log10(freq/200) / 2
+        brightness = Math.max(0, Math.min(1, Math.log10(effects.filter.frequency.value / 200) / 2));
+        space = effects.reverb.wet.value;
+        dirt = effects.distortion.distortion;
+    }
+    
     return {
         oscillator: options.oscillator.type,
         attack: options.envelope.attack,
-        release: options.envelope.release
+        release: options.envelope.release,
+        brightness,
+        space,
+        dirt
     };
 }

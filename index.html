@@ -58,7 +58,7 @@
             </div>
             
             <div class="tweak-section">
-                <canvas id="tweak-wave-canvas" width="250" height="80" style="background: rgba(0,0,0,0.03); border-radius: 0.5rem; margin-bottom: 1rem; width: 100%; display: block;"></canvas>
+                <canvas id="tweak-wave-canvas" width="250" height="80" style="background: rgba(0,0,0,0.03); border-radius: 0.5rem; margin-bottom: 1rem; width: 100%; display: block; cursor: pointer;" title="Click to change Waveform"></canvas>
                 <p style="font-size: 0.85rem; color: rgba(0,0,0,0.6); margin-bottom: 0.5rem; text-align: center;">Drag the dot to find your sound</p>
                 <div id="magic-pad">
                     <div id="magic-dot"></div>
@@ -66,6 +66,27 @@
                     <div class="pad-label bottom">Long</div>
                     <div class="pad-label left">Soft</div>
                     <div class="pad-label right">Hard</div>
+                </div>
+            </div>
+            
+            <div class="tweak-section" style="margin-top: 1.5rem;">
+                <div class="slider-row" style="margin-bottom: 1rem;">
+                    <label style="display: flex; justify-content: space-between; font-size: 0.85rem; opacity: 0.7; margin-bottom: 0.5rem;">
+                        <span>Brightness</span>
+                    </label>
+                    <input type="range" id="brightness-slider" min="0" max="1" step="0.01" style="width: 100%;">
+                </div>
+                <div class="slider-row" style="margin-bottom: 1rem;">
+                    <label style="display: flex; justify-content: space-between; font-size: 0.85rem; opacity: 0.7; margin-bottom: 0.5rem;">
+                        <span>Space</span>
+                    </label>
+                    <input type="range" id="space-slider" min="0" max="1" step="0.01" style="width: 100%;">
+                </div>
+                <div class="slider-row">
+                    <label style="display: flex; justify-content: space-between; font-size: 0.85rem; opacity: 0.7; margin-bottom: 0.5rem;">
+                        <span>Dirt</span>
+                    </label>
+                    <input type="range" id="dirt-slider" min="0" max="1" step="0.01" style="width: 100%;">
                 </div>
             </div>
             
