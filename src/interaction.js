@@ -187,23 +187,19 @@ export function initInteraction(canvasEl) {
             const noteSecs = progress * loopDur;
             const qTime = Tone.Time(noteSecs).quantize("32n");
             
-            let noteVal;
-            if (activeTrack.type === 'drums') {
-                if (clickY < canvasEl.height * 0.35) {
-                    noteVal = 'hat';
-                } else if (clickY < canvasEl.height * 0.65) {
-                    noteVal = 'snare';
-                } else {
-                    noteVal = 'kick';
-                }
-            } else {
-                noteVal = yToNote(clickY, canvasEl.height);
-            }
+            const yIndex = Math.floor(clickY / (canvasEl.height / 5));
+            let scaleIndex = (5 - 1) - yIndex;
+            if (scaleIndex < 0) scaleIndex = 0;
+            if (scaleIndex >= 5) scaleIndex = 4;
+            
+            const scale = getTrackScale(activeTrack);
+            let noteVal = scale[scaleIndex];
             
             dragNote = {
                 id: generateId(),
                 trackId: activeTrack.id,
                 note: noteVal,
+                scaleIndex: scaleIndex,
                 time: Tone.Time(qTime).toBarsBeatsSixteenths(),
                 duration: "32n"
             };
@@ -251,18 +247,13 @@ export function initInteraction(canvasEl) {
             dragNote.time = Tone.Time(qTime).toBarsBeatsSixteenths();
             
             // Update pitch
-            let newNoteVal;
-            if (activeTrack.type === 'drums') {
-                if (currentY < canvasEl.height * 0.35) {
-                    newNoteVal = 'hat';
-                } else if (currentY < canvasEl.height * 0.65) {
-                    newNoteVal = 'snare';
-                } else {
-                    newNoteVal = 'kick';
-                }
-            } else {
-                newNoteVal = yToNote(currentY, canvasEl.height);
-            }
+            const yIndex = Math.floor(currentY / (canvasEl.height / 5));
+            let scaleIndex = (5 - 1) - yIndex;
+            if (scaleIndex < 0) scaleIndex = 0;
+            if (scaleIndex >= 5) scaleIndex = 4;
+            
+            newNoteVal = getTrackScale(activeTrack)[scaleIndex];
+            dragNote.scaleIndex = scaleIndex;
             dragNote.note = newNoteVal;
             
             if (oldNote !== newNoteVal) {

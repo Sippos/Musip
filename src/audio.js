@@ -95,7 +95,7 @@ export function syncAudioPart(notes) {
 }
 
 export function quantize(time) {
-    return Tone.Time(time).quantize("16n");
+    return Tone.Time(time).quantize("32n");
 }
 
 export const scales = {

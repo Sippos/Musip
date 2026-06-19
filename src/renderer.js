@@ -113,16 +113,15 @@ function render(time) {
         const durSecs = Tone.Time(note.duration).toSeconds();
         const noteWidth = (durSecs / loopDur) * canvas.width;
         
-        const noteY = noteToY(note.note, canvas.height);
+        const noteY = noteToY(note, canvas.height);
         const zoomY = state.camera ? state.camera.zoomY : 1.0;
         const noteHeight = Math.max(4, canvas.height * 0.015 * zoomY);
         
         ctx.beginPath();
-        // roundRect fallback just in case
         if (ctx.roundRect) {
-            ctx.roundRect(noteX, noteY, Math.max(8, noteWidth), noteHeight, 8);
+            ctx.roundRect(noteX, noteY - noteHeight/2, Math.max(8, noteWidth), noteHeight, 8);
         } else {
-            ctx.rect(noteX, noteY, Math.max(8, noteWidth), noteHeight);
+            ctx.rect(noteX, noteY - noteHeight/2, Math.max(8, noteWidth), noteHeight);
         }
         ctx.fill();
     });

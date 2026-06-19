@@ -21,23 +21,32 @@ export function initExport(canvasEl) {
         }
     }
     
-    // Setup Export Button
     let isRecording = false;
+    let stopRecordingResolver = null;
+    let originalText = '';
+    let originalBg = '';
+    let originalColor = '';
     
     document.getElementById('export-btn').addEventListener('click', async (e) => {
-        if (isRecording) return;
+        const btn = e.currentTarget;
+        
+        if (isRecording) {
+            if (stopRecordingResolver) {
+                stopRecordingResolver();
+            }
+            return;
+        }
         
         if (!state.isPlaying) {
             alert("Please make sure the session is playing before exporting!");
             return;
         }
         
-        const btn = e.currentTarget;
-        const originalText = btn.textContent;
-        const originalBg = btn.style.backgroundColor;
-        const originalColor = btn.style.color;
+        originalText = btn.textContent;
+        originalBg = btn.style.backgroundColor;
+        originalColor = btn.style.color;
         
-        btn.textContent = 'Recording...';
+        btn.textContent = 'Stop Recording';
         btn.style.backgroundColor = '#ff7675';
         btn.style.color = '#ffffff';
         isRecording = true;
@@ -45,16 +54,18 @@ export function initExport(canvasEl) {
         try {
             const audioModule = await import('./audio.js');
             const masterRecorder = audioModule.masterRecorder;
-            const LOOP_LENGTH_SECONDS = audioModule.LOOP_LENGTH_SECONDS;
             
             // Start recording
             masterRecorder.start();
             
-            // Wait for exactly one loop duration
-            await new Promise(resolve => setTimeout(resolve, LOOP_LENGTH_SECONDS() * 1000));
+            // Wait until user clicks "Stop Recording"
+            await new Promise(resolve => {
+                stopRecordingResolver = resolve;
+            });
             
             // Stop recording
             const recording = await masterRecorder.stop();
+            stopRecordingResolver = null;
             
             // Create a download link for the webm file
             const url = URL.createObjectURL(recording);

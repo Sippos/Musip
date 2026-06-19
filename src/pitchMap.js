@@ -5,7 +5,15 @@ export const MIN_MIDI = 36; // C2
 export const MAX_MIDI = 96; // C7
 export const MIDI_RANGE = MAX_MIDI - MIN_MIDI;
 
-export function noteToY(noteStr, height) {
+export function noteToY(noteObj, height) {
+    const noteStr = typeof noteObj === 'string' ? noteObj : noteObj.note;
+    
+    if (typeof noteObj === 'object' && noteObj.scaleIndex !== undefined && noteObj.scaleIndex !== null) {
+        const laneHeight = height / 5;
+        const yIndex = 4 - noteObj.scaleIndex; // 0 (bottom) to 4 (top)
+        return (yIndex * laneHeight) + (laneHeight / 2);
+    }
+    
     if (noteStr === 'kick') return height * 0.8;
     if (noteStr === 'snare') return height * 0.5;
     if (noteStr === 'hat') return height * 0.2;
