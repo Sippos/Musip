@@ -112,7 +112,6 @@ h1 {
 }
 
 button {
-    pointer-events: auto;
     font-family: var(--font-main);
     background: rgba(255, 255, 255, 0.5);
     border: 1px solid rgba(0, 0, 0, 0.1);
@@ -189,6 +188,7 @@ button:hover {
     border-radius: 2rem;
     font-weight: 300;
     opacity: 0;
+    pointer-events: none;
     transition: opacity 0.3s ease;
 }
 
