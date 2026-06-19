@@ -1,0 +1,315 @@
+import { state, generateId, getActiveTrack, saveUserPreset, getPreset } from './state.js';
+import { initAudio, initTrackSynth } from './audio.js';
+import { initRenderer } from './renderer.js';
+import { initInteraction } from './interaction.js';
+import { initExport } from './export.js';
+import * as Tone from 'tone';
+
+const canvas = document.getElementById('sequencer');
+const startBtn = document.getElementById('start-btn');
+const controls = document.getElementById('controls');
+const statusText = document.getElementById('status-text');
+const trackTabs = document.getElementById('track-tabs');
+const addTrackBtn = document.getElementById('add-track-btn');
+const undoBtn = document.getElementById('undo-btn');
+
+const addTrackModal = document.getElementById('add-track-modal');
+const closeTrackModalBtn = document.getElementById('close-track-modal-btn');
+const trackOptBtns = document.querySelectorAll('.track-opt-btn');
+
+const btnVisPulse = document.getElementById('btn-visual-pulse');
+const btnAudPulse = document.getElementById('btn-audio-pulse');
+
+const tweakBtn = document.getElementById('tweak-btn');
+const tweakPanel = document.getElementById('tweak-panel');
+const closeTweakBtn = document.getElementById('close-tweak-btn');
+const magicPad = document.getElementById('magic-pad');
+const magicDot = document.getElementById('magic-dot');
+const tweakWaveCanvas = document.getElementById('tweak-wave-canvas');
+const savePresetBtn = document.getElementById('save-preset-btn');
+
+startBtn.addEventListener('click', async () => {
+    await initAudio();
+    state.isPlaying = true;
+    startBtn.style.display = 'none';
+    statusText.textContent = 'Session Active. Press A, S, D, F, G to play.';
+    controls.classList.remove('hidden');
+    
+    const onboarding = document.getElementById('onboarding');
+    if (onboarding) onboarding.classList.add('hidden');
+    
+    renderTrackTabs();
+    Tone.Transport.start();
+});
+
+function renderTrackTabs() {
+    trackTabs.innerHTML = '';
+    state.tracks.forEach(track => {
+        const btn = document.createElement('button');
+        btn.className = `inst-btn ${track.id === state.activeTrackId ? 'active' : ''}`;
+        btn.textContent = track.name;
+        // Apply color hint to button border
+        btn.style.borderBottom = `3px solid ${track.color}`;
+        
+        btn.addEventListener('click', () => {
+            state.activeTrackId = track.id;
+            renderTrackTabs();
+            
+            const activeTrack = getActiveTrack();
+            if (activeTrack && activeTrack.type === 'drums') {
+                tweakBtn.style.display = 'none';
+                tweakPanel.classList.add('hidden');
+            } else {
+                tweakBtn.style.display = 'inline-block';
+                updateTweakUI();
+            }
+        });
+        
+        if (track.id === state.activeTrackId) {
+            btn.style.backgroundColor = track.color;
+            btn.style.borderBottom = 'none';
+        } else {
+            btn.style.backgroundColor = 'transparent';
+            btn.style.borderBottom = `3px solid ${track.color}`;
+        }
+        
+        trackTabs.appendChild(btn);
+    });
+}
+
+addTrackBtn.addEventListener('click', () => {
+    addTrackModal.classList.remove('hidden');
+});
+
+closeTrackModalBtn.addEventListener('click', () => {
+    addTrackModal.classList.add('hidden');
+});
+
+trackOptBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+        addTrackModal.classList.add('hidden');
+        
+        const type = btn.dataset.type;
+        const newTrackId = 'track-' + generateId();
+        
+        let presetId;
+        if (type === 'drums') {
+            presetId = 'drums-kit';
+        } else {
+            // Randomly choose bass or keys for synth track
+            presetId = Math.random() > 0.5 ? 'bass-square' : 'keys-sine';
+        }
+        
+        // Generate a pleasant random pastel color
+        const hue = Math.floor(Math.random() * 360);
+        const color = `hsl(${hue}, 60%, 75%)`;
+        
+        const newTrack = {
+            id: newTrackId,
+            name: `Track ${state.tracks.length + 1}`,
+            presetId: presetId,
+            color: color,
+            type: type
+        };
+        
+        state.tracks.push(newTrack);
+        initTrackSynth(newTrackId, getPreset(presetId));
+        state.activeTrackId = newTrackId;
+        renderTrackTabs();
+        
+        const activeTrack = getActiveTrack();
+        if (activeTrack && activeTrack.type === 'drums') {
+            tweakBtn.style.display = 'none';
+            tweakPanel.classList.add('hidden');
+        } else {
+            tweakBtn.style.display = 'inline-block';
+            updateTweakUI();
+        }
+    });
+});
+
+// Undo UI Button
+undoBtn.addEventListener('click', () => {
+    state.notes.pop();
+    import('./audio.js').then(module => {
+        module.syncAudioPart(state.notes);
+    });
+});
+
+// Navbar Toggles
+btnVisPulse.addEventListener('click', () => {
+    state.settings.visualPulse = !state.settings.visualPulse;
+    btnVisPulse.classList.toggle('active', state.settings.visualPulse);
+});
+btnAudPulse.addEventListener('click', () => {
+    state.settings.audioPulse = !state.settings.audioPulse;
+    btnAudPulse.classList.toggle('active', state.settings.audioPulse);
+});
+
+// Tweak Panel UI
+tweakBtn.addEventListener('click', () => {
+    tweakPanel.classList.toggle('hidden');
+    updateTweakUI();
+});
+
+closeTweakBtn.addEventListener('click', () => {
+    tweakPanel.classList.add('hidden');
+});
+
+function updateTweakUI() {
+    import('./audio.js').then(module => {
+        const params = module.getInstrumentParams(state.activeTrackId);
+        if (!params) return;
+        
+        // Reverse mapping from params to dot position
+        // X = oscillator
+        const oscMap = { 'sine': 0.125, 'triangle': 0.375, 'square': 0.625, 'sawtooth': 0.875 };
+        const px = oscMap[params.oscillator] || 0.5;
+        
+        // Y = envelope length
+        // Y=0 -> attack 0.001, release 0.1
+        // Y=1 -> attack 1.0, release 3.0
+        const py = Math.min(1, Math.max(0, (params.release - 0.1) / 2.9));
+        
+        magicDot.style.left = `${px * 100}%`;
+        magicDot.style.top = `${py * 100}%`;
+        
+        drawTweakWave(params.oscillator, params.attack, params.release);
+    });
+}
+
+function drawTweakWave(oscillator, attack, release) {
+    if (!tweakWaveCanvas) return;
+    const ctx = tweakWaveCanvas.getContext('2d');
+    const width = tweakWaveCanvas.width;
+    const height = tweakWaveCanvas.height;
+    
+    ctx.clearRect(0, 0, width, height);
+    ctx.beginPath();
+    
+    // Track color if active, otherwise black
+    const activeTrack = getActiveTrack();
+    ctx.strokeStyle = activeTrack ? activeTrack.color : '#2D3436';
+    ctx.lineWidth = 4;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    
+    const centerY = height / 2;
+    const amp = height * 0.3;
+    
+    const attackX = (attack / 1.0) * (width * 0.3);
+    const releaseX = width - ((release / 3.0) * (width * 0.3));
+    
+    for(let x = 0; x <= width; x += 2) {
+        let y = centerY;
+        const phase = (x / width) * Math.PI * 4; 
+        
+        let env = 1.0;
+        if (x < attackX) env = x / Math.max(1, attackX);
+        if (x > releaseX) env = 1.0 - ((x - releaseX) / (width - releaseX));
+        env = Math.max(0, env);
+        
+        if (oscillator === 'sine') {
+            y -= Math.sin(phase) * amp * env;
+        } else if (oscillator === 'triangle') {
+            y -= (Math.asin(Math.sin(phase)) / (Math.PI / 2)) * amp * env;
+        } else if (oscillator === 'square') {
+            y -= (Math.sin(phase) > 0 ? 1 : -1) * amp * env;
+        } else if (oscillator === 'sawtooth') {
+            y -= (2 * (phase / (2 * Math.PI) - Math.floor(0.5 + phase / (2 * Math.PI)))) * amp * env;
+        }
+        
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+}
+
+// Magic Pad Interaction
+let isDraggingPad = false;
+let padPreviewTimeout = null;
+
+function handlePadMove(e) {
+    if (!isDraggingPad) return;
+    
+    const rect = magicPad.getBoundingClientRect();
+    let x = (e.clientX - rect.left) / rect.width;
+    let y = (e.clientY - rect.top) / rect.height;
+    
+    x = Math.max(0, Math.min(1, x));
+    y = Math.max(0, Math.min(1, y));
+    
+    let osc = 'sine';
+    if (x > 0.25) osc = 'triangle';
+    if (x > 0.5) osc = 'square';
+    if (x > 0.75) osc = 'sawtooth';
+    
+    const attack = 0.001 + (y * 0.999); 
+    const release = 0.1 + (y * 2.9);
+    
+    magicDot.style.left = `${x * 100}%`;
+    magicDot.style.top = `${y * 100}%`;
+    
+    drawTweakWave(osc, attack, release);
+    
+    import('./audio.js').then(module => {
+        module.updateInstrumentParams(state.activeTrackId, {
+            oscillator: osc,
+            attack: attack,
+            release: release
+        });
+        
+        // Debounced preview sound
+        if (!padPreviewTimeout) {
+            module.playSound(state.activeTrackId, "C3", undefined, "16n");
+            padPreviewTimeout = setTimeout(() => {
+                padPreviewTimeout = null;
+            }, 150); // limit to roughly every 150ms while dragging
+        }
+    });
+}
+
+magicPad.addEventListener('pointerdown', (e) => {
+    isDraggingPad = true;
+    magicPad.setPointerCapture(e.pointerId);
+    handlePadMove(e);
+});
+
+magicPad.addEventListener('pointermove', handlePadMove);
+
+magicPad.addEventListener('pointerup', (e) => {
+    isDraggingPad = false;
+    magicPad.releasePointerCapture(e.pointerId);
+});
+
+savePresetBtn.addEventListener('click', () => {
+    const name = prompt("Name your preset (e.g. 'Sub Bass'):");
+    if (!name) return;
+    
+    import('./audio.js').then(module => {
+        const params = module.getInstrumentParams(state.activeTrackId);
+        const presetId = name.toLowerCase().replace(/\s+/g, '-');
+        const presetData = {
+            name: name,
+            type: 'synth',
+            oscillator: params.oscillator,
+            attack: params.attack,
+            release: params.release
+        };
+        saveUserPreset(presetId, presetData);
+        
+        const activeTrack = getActiveTrack();
+        if(activeTrack) {
+            activeTrack.presetId = presetId;
+            activeTrack.name = name;
+            renderTrackTabs();
+        }
+        
+        alert("Preset saved to your browser!");
+    });
+});
+
+// Initialize subsystems
+initRenderer(canvas);
+initInteraction(canvas);
+initExport(canvas);
