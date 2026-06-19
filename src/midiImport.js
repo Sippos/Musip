@@ -23,32 +23,31 @@ export async function importMidiFile(file, renderTrackTabs) {
     if (activeMidiTracks.length === 1 && !activeMidiTracks[0].instrument.percussion && activeMidiTracks[0].channel !== 9) {
         // AUTO-SPLIT Single Track MIDI
         const srcTrack = activeMidiTracks[0];
-        const lowId = `track-${generateId()}`;
-        const midId = `track-${generateId()}`;
-        const highId = `track-${generateId()}`;
         
-        state.tracks.push({ id: lowId, name: 'Bass (Auto-Split)', presetId: 'bass-square', color: colors[0], type: 'synth' });
-        state.tracks.push({ id: midId, name: 'Mid (Auto-Split)', presetId: 'keys-sine', color: colors[1], type: 'synth' });
-        state.tracks.push({ id: highId, name: 'Lead (Auto-Split)', presetId: 'keys-sine', color: colors[2], type: 'synth' });
+        const bassNotes = srcTrack.notes.filter(n => n.midi < 48);
+        const midNotes = srcTrack.notes.filter(n => n.midi >= 48 && n.midi <= 72);
+        const leadNotes = srcTrack.notes.filter(n => n.midi > 72);
         
-        srcTrack.notes.forEach(note => {
-            let targetId;
-            if (note.midi < 48) targetId = lowId;      // Below C3
-            else if (note.midi <= 72) targetId = midId; // C3 to C5
-            else targetId = highId;                     // Above C5
+        const addSplitTrack = (notes, name, preset, colorIdx) => {
+            if (notes.length === 0) return;
+            const trackId = `track-${generateId()}`;
+            state.tracks.push({ id: trackId, name: name, presetId: preset, color: colors[colorIdx % colors.length], type: 'synth' });
             
-            state.notes.push({
-                id: generateId(),
-                trackId: targetId,
-                note: note.name,
-                time: note.time,
-                duration: Math.max(0.05, note.duration)
+            notes.forEach(note => {
+                state.notes.push({
+                    id: generateId(),
+                    trackId: trackId,
+                    note: note.name,
+                    time: note.time,
+                    duration: Math.max(0.05, note.duration)
+                });
             });
-        });
+            initTrackSynth(trackId, getPreset(preset));
+        };
         
-        initTrackSynth(lowId, getPreset('bass-square'));
-        initTrackSynth(midId, getPreset('keys-sine'));
-        initTrackSynth(highId, getPreset('keys-sine'));
+        addSplitTrack(bassNotes, 'Bass (Auto-Split)', 'bass-square', 0);
+        addSplitTrack(midNotes, 'Mid (Auto-Split)', 'keys-sine', 1);
+        addSplitTrack(leadNotes, 'Lead (Auto-Split)', 'keys-sine', 2);
         
     } else {
         // STANDARD IMPORT

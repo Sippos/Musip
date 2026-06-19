@@ -50,11 +50,14 @@ function renderTrackTabs() {
         btn.className = `inst-btn ${track.id === state.activeTrackId ? 'active' : ''}`;
         btn.innerHTML = `
             <span class="track-name">${track.name}</span>
-            <span class="mute-toggle" style="margin-left: 8px; opacity: 0.7; vertical-align: middle;">
+            <span class="mute-toggle" style="margin-left: 8px; opacity: 0.7; vertical-align: middle;" title="Mute/Unmute">
                 ${track.muted ? 
                     '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><line x1="1" y1="1" x2="23" y2="23"></line><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M23 9l-6 6"></path><path d="M17 9l6 6"></path></svg>' : 
                     '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>'
                 }
+            </span>
+            <span class="delete-track" style="margin-left: 8px; opacity: 0.5; vertical-align: middle;" title="Delete Track">
+                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
             </span>
         `;
         
@@ -69,6 +72,33 @@ function renderTrackTabs() {
             e.stopPropagation(); // prevent track selection
             track.muted = !track.muted;
             renderTrackTabs();
+        });
+        
+        const deleteToggle = btn.querySelector('.delete-track');
+        deleteToggle.addEventListener('click', (e) => {
+            e.stopPropagation(); // prevent track selection
+            if (confirm(`Delete track "${track.name}" and all its notes?`)) {
+                state.tracks = state.tracks.filter(t => t.id !== track.id);
+                state.notes = state.notes.filter(n => n.trackId !== track.id);
+                
+                if (state.activeTrackId === track.id) {
+                    state.activeTrackId = state.tracks.length > 0 ? state.tracks[0].id : null;
+                }
+                
+                import('./audio.js').then(module => {
+                    module.syncAudioPart(state.notes);
+                });
+                
+                renderTrackTabs();
+                const activeTrack = getActiveTrack();
+                if (!activeTrack || activeTrack.type === 'drums') {
+                    tweakBtn.style.display = 'none';
+                    tweakPanel.classList.add('hidden');
+                } else {
+                    tweakBtn.style.display = 'inline-block';
+                    updateTweakUI();
+                }
+            }
         });
         
         btn.addEventListener('click', () => {
