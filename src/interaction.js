@@ -128,28 +128,12 @@ export function initInteraction(canvasEl) {
         
         const hoveredLayout = layout.find(l => currentY >= l.top && currentY <= l.bottom);
         if (hoveredLayout && hoveredLayout.track.expanded) {
-            // Dynamic clamping based on track notes
-            const trackNotes = state.notes.filter(n => n.trackId === hoveredLayout.track.id);
-            let minLimit = 36;
-            let maxLimit = 72;
+            let minLimit = 12; // C0
+            let maxLimit = 84; // C6
             
             if (hoveredLayout.track.type === 'drums') {
                 minLimit = 36;
                 maxLimit = 36; // Lock drum scrolling
-            } else {
-                if (hoveredLayout.track.name.toLowerCase().includes('bass')) {
-                    minLimit = 24;
-                    maxLimit = 48;
-                }
-                
-                if (trackNotes.length > 0) {
-                    const trackMidis = trackNotes.map(n => Tone.Frequency(n.note).toMidi());
-                    const trackMin = Math.min(...trackMidis);
-                    const trackMax = Math.max(...trackMidis);
-                    // Ensure we can scroll far enough to see all notes
-                    minLimit = Math.min(minLimit, trackMin - 12);
-                    maxLimit = Math.max(maxLimit, trackMax - 12);
-                }
             }
             
             const delta = Math.sign(e.deltaY);
