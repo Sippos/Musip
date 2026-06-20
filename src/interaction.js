@@ -112,7 +112,6 @@ export function initInteraction(canvasEl) {
     let dragNoteIndex = -1;
     let dragOffsets = [];
     let dragStartNoteSecs = 0;
-    let dragOffsets = []; // For multi-selection drag
 
     
     // Prevent context menu to allow right-click erasing
