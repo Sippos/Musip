@@ -398,6 +398,22 @@ export function initInteraction(canvasEl) {
         } else if (dragMode === 'move' || dragMode === 'move-selection') {
             const diffXSecs = ((currentX - dragStartX) / canvasEl.width) * loopDur;
             
+            // Auto-scroll track internal pitch if dragging near edge
+            if (dragNote) {
+                const trLayout = layout.find(l => l.track.id === dragNote.trackId);
+                if (trLayout && trLayout.track.expanded && trLayout.track.type !== 'drums') {
+                    const edgeThreshold = 30; // pixels
+                    if (currentY < trLayout.top + edgeThreshold && trLayout.track.baseMidi < 84) {
+                        trLayout.track.baseMidi += 1;
+                        // Adjust dragStartY so the note stays under cursor visually
+                        dragStartY += (trLayout.height / 24); 
+                    } else if (currentY > trLayout.bottom - edgeThreshold && trLayout.track.baseMidi > 12) {
+                        trLayout.track.baseMidi -= 1;
+                        dragStartY -= (trLayout.height / 24);
+                    }
+                }
+            }
+            
             dragOffsets.forEach(item => {
                 let noteSecs = item.startTime + diffXSecs;
                 if (noteSecs < 0) noteSecs = 0;
