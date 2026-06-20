@@ -64,6 +64,54 @@ header {
     left: 50%;
     transform: translateX(-50%);
     pointer-events: auto;
+    align-items: center;
+    gap: 0.5rem;
+    background: #f1f0ea;
+    padding: 0.5rem;
+    border-radius: 2rem;
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.05), -2px -2px 5px rgba(255,255,255,0.8);
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    pointer-events: auto;
+}
+
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+}
+
+.tool-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+    transition: all 0.2s ease;
+}
+
+.tool-btn:hover {
+    background: rgba(0,0,0,0.05);
+    color: #333;
+}
+
+.tool-btn.active {
+    background: #fff;
+    color: #ffb7b2;
+    box-shadow: inset 1px 1px 3px rgba(0,0,0,0.1);
+}
+
+.nav-divider {
+    width: 1px;
+    height: 24px;
+    background: rgba(0,0,0,0.1);
+    margin: 0 0.2rem;
 }
 
 .nav-icon {

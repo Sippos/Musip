@@ -176,7 +176,9 @@ function render(time) {
         
         let noteHeight;
         if (track.expanded) {
-            noteHeight = Math.max(4, canvas.height * 0.015);
+            noteHeight = Math.max(4, trackHeight * 0.015);
+            // Hide if completely outside bounds
+            if (noteY + noteHeight/2 < trackTop || noteY - noteHeight/2 > trackTop + trackHeight) return;
         } else {
             const laneHeight = trackHeight / 5;
             noteHeight = laneHeight * 0.8;
@@ -189,8 +191,24 @@ function render(time) {
             ctx.rect(noteX, noteY - noteHeight/2, Math.max(8, noteWidth), noteHeight);
         }
         ctx.fill();
+        
+        // Highlight selected notes
+        if (state.selectedNoteIds && state.selectedNoteIds.includes(note.id)) {
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
     });
     ctx.globalAlpha = 1.0;
+    
+    // Draw Selection Box
+    if (state.selectionBox) {
+        ctx.fillStyle = 'rgba(150, 150, 200, 0.2)';
+        ctx.strokeStyle = 'rgba(150, 150, 200, 0.6)';
+        ctx.lineWidth = 1;
+        ctx.fillRect(state.selectionBox.x, state.selectionBox.y, state.selectionBox.w, state.selectionBox.h);
+        ctx.strokeRect(state.selectionBox.x, state.selectionBox.y, state.selectionBox.w, state.selectionBox.h);
+    }
     
     // Playhead
     ctx.fillStyle = 'rgba(0,0,0,0.15)';

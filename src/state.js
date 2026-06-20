@@ -58,6 +58,9 @@ export const state = {
         visualPulse: false,
         audioPulse: false
     },
+    activeTool: 'draw', // 'draw', 'select', 'erase'
+    selectedNoteIds: [],
+    selectionBox: null, // { x, y, w, h }
     camera: {
         scrollY: 0,
         zoomY: 1.0

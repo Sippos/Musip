@@ -213,6 +213,46 @@ closeTrackModalBtn.addEventListener('click', () => {
     addTrackModal.classList.add('hidden');
 });
 
+const toolBtns = {
+    'draw': document.getElementById('tool-draw'),
+    'select': document.getElementById('tool-select'),
+    'erase': document.getElementById('tool-erase')
+};
+
+Object.keys(toolBtns).forEach(tool => {
+    const btn = toolBtns[tool];
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+        state.activeTool = tool;
+        Object.values(toolBtns).forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        
+        if (tool !== 'select') {
+            state.selectedNoteIds = [];
+        }
+    });
+});
+
+document.addEventListener('keydown', (e) => {
+    // Tool shortcuts
+    if (e.target.tagName !== 'INPUT' && !e.ctrlKey && !e.metaKey) {
+        if (e.key.toLowerCase() === 'd') toolBtns['draw']?.click();
+        if (e.key.toLowerCase() === 's') toolBtns['select']?.click();
+        if (e.key.toLowerCase() === 'e') toolBtns['erase']?.click();
+        
+        // Delete selection
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+            if (state.selectedNoteIds.length > 0) {
+                state.notes = state.notes.filter(n => !state.selectedNoteIds.includes(n.id));
+                state.selectedNoteIds = [];
+                import('./audio.js').then(module => {
+                    module.syncAudioPart(state.notes);
+                });
+            }
+        }
+    }
+});
+
 trackOptBtns.forEach(btn => {
     btn.addEventListener('click', () => {
         addTrackModal.classList.add('hidden');

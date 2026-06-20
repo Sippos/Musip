@@ -33,9 +33,7 @@ export function noteToY(noteObj, trackTop, trackHeight, track) {
             const laneHeight = trackHeight / TRACK_MIDI_RANGE;
             const midi = Tone.Frequency(noteStr).toMidi();
             const minMidi = track.baseMidi || 48;
-            const maxMidi = minMidi + TRACK_MIDI_RANGE - 1;
-            const clampedMidi = Math.max(minMidi, Math.min(maxMidi, midi));
-            const noteIndex = clampedMidi - minMidi; // 0 to 23
+            const noteIndex = midi - minMidi; // 0 to 23
             const yIndex = (TRACK_MIDI_RANGE - 1) - noteIndex; // 23 to 0
             return trackTop + (yIndex * laneHeight) + (laneHeight / 2);
         } catch {
