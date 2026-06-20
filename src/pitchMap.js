@@ -1,9 +1,7 @@
 import * as Tone from 'tone';
 import { state } from './state.js';
 
-export const MIN_MIDI = 36; // C2
-export const MAX_MIDI = 96; // C7
-export const MIDI_RANGE = MAX_MIDI - MIN_MIDI;
+export const TRACK_MIDI_RANGE = 24;
 
 export const HEADER_OFFSET = 80;
 export const TRACK_HEIGHT_COLLAPSED = 100;
@@ -27,15 +25,19 @@ export function getTrackLayout(tracks, scrollY) {
     return layout;
 }
 
-export function noteToY(noteObj, trackTop, trackHeight, expanded) {
+export function noteToY(noteObj, trackTop, trackHeight, track) {
     const noteStr = typeof noteObj === 'string' ? noteObj : noteObj.note;
     
-    if (expanded) {
+    if (track.expanded) {
         try {
+            const laneHeight = trackHeight / TRACK_MIDI_RANGE;
             const midi = Tone.Frequency(noteStr).toMidi();
-            const clampedMidi = Math.max(MIN_MIDI, Math.min(MAX_MIDI, midi));
-            const normalized = 1.0 - ((clampedMidi - MIN_MIDI) / MIDI_RANGE);
-            return trackTop + (normalized * trackHeight);
+            const minMidi = track.baseMidi || 48;
+            const maxMidi = minMidi + TRACK_MIDI_RANGE - 1;
+            const clampedMidi = Math.max(minMidi, Math.min(maxMidi, midi));
+            const noteIndex = clampedMidi - minMidi; // 0 to 23
+            const yIndex = (TRACK_MIDI_RANGE - 1) - noteIndex; // 23 to 0
+            return trackTop + (yIndex * laneHeight) + (laneHeight / 2);
         } catch {
             return trackTop + (trackHeight / 2);
         }
@@ -49,8 +51,11 @@ export function noteToY(noteObj, trackTop, trackHeight, expanded) {
         
         try {
             const midi = Tone.Frequency(noteStr).toMidi();
-            const clampedMidi = Math.max(MIN_MIDI, Math.min(MAX_MIDI, midi));
-            const normalized = (clampedMidi - MIN_MIDI) / MIDI_RANGE;
+            // In collapsed mode we still just estimate position based on a generic range
+            const minMidi = track.baseMidi || 48;
+            const maxMidi = minMidi + TRACK_MIDI_RANGE;
+            const clampedMidi = Math.max(minMidi, Math.min(maxMidi, midi));
+            const normalized = (clampedMidi - minMidi) / TRACK_MIDI_RANGE;
             const scaleIndex = Math.floor(normalized * 4.99); // 0 to 4
             const yIndex = 4 - scaleIndex;
             return trackTop + (yIndex * laneHeight) + (laneHeight / 2);
@@ -60,10 +65,22 @@ export function noteToY(noteObj, trackTop, trackHeight, expanded) {
     }
 }
 
-export function yToNote(y, trackTop, trackHeight) {
-    const yWithin = Math.max(0, Math.min(trackHeight, y - trackTop));
-    const normalized = 1.0 - (yWithin / trackHeight);
-    const midi = Math.round(MIN_MIDI + (normalized * MIDI_RANGE));
-    const clamped = Math.max(0, Math.min(127, midi));
-    return Tone.Frequency(clamped, "midi").toNote();
+export function yToNote(y, trackTop, trackHeight, track) {
+    if (track.expanded) {
+        const yWithin = Math.max(0, Math.min(trackHeight - 0.001, y - trackTop));
+        const laneHeight = trackHeight / TRACK_MIDI_RANGE;
+        const yIndex = Math.floor(yWithin / laneHeight);
+        const noteIndex = (TRACK_MIDI_RANGE - 1) - yIndex;
+        const minMidi = track.baseMidi || 48;
+        const midi = minMidi + noteIndex;
+        const clamped = Math.max(0, Math.min(127, midi));
+        return Tone.Frequency(clamped, "midi").toNote();
+    } else {
+        const yWithin = Math.max(0, Math.min(trackHeight - 0.001, y - trackTop));
+        const normalized = 1.0 - (yWithin / trackHeight);
+        const minMidi = track.baseMidi || 48;
+        const midi = Math.floor(minMidi + (normalized * TRACK_MIDI_RANGE));
+        const clamped = Math.max(0, Math.min(127, midi));
+        return Tone.Frequency(clamped, "midi").toNote();
+    }
 }

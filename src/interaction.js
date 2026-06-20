@@ -114,14 +114,30 @@ export function initInteraction(canvasEl) {
     // Prevent context menu to allow right-click erasing
     canvasEl.addEventListener('contextmenu', e => e.preventDefault());
     
-    // Scroll
+    // Wheel event for scrolling
     canvasEl.addEventListener('wheel', (e) => {
-        if (!state.isPlaying) return;
-        e.preventDefault(); // prevent actual page scroll
+        e.preventDefault();
         
+        const rect = canvasEl.getBoundingClientRect();
+        const currentY = e.clientY - rect.top;
+        const scrollY = state.camera ? state.camera.scrollY : 0;
+        const layout = getTrackLayout(state.tracks, scrollY);
+        
+        const hoveredLayout = layout.find(l => currentY >= l.top && currentY <= l.bottom);
+        if (hoveredLayout && hoveredLayout.track.expanded) {
+            // Scroll internal pitch
+            const delta = Math.sign(e.deltaY);
+            // Invert delta so scrolling down moves to lower pitches
+            hoveredLayout.track.baseMidi = Math.max(0, Math.min(100, (hoveredLayout.track.baseMidi || 48) + delta));
+            return;
+        }
+        
+        // Otherwise scroll arrangement
+        if (!state.camera) state.camera = { scrollY: 0, zoomY: 1.0 };
         state.camera.scrollY -= e.deltaY;
-        const layout = getTrackLayout(state.tracks, 0);
-        const totalHeight = layout.length > 0 ? layout[layout.length - 1].bottom : 0;
+        
+        const baseLayout = getTrackLayout(state.tracks, 0);
+        const totalHeight = baseLayout.length > 0 ? baseLayout[baseLayout.length - 1].bottom : 0;
         const maxScroll = Math.max(0, totalHeight - canvasEl.height);
         state.camera.scrollY = Math.max(-maxScroll, Math.min(0, state.camera.scrollY));
     }, { passive: false });
@@ -151,7 +167,7 @@ export function initInteraction(canvasEl) {
             const durSecs = Tone.Time(n.duration).toSeconds();
             const noteWidth = (durSecs / loopDur) * canvasEl.width;
             
-            const noteY = noteToY(n, trackTop, trackHeight, track.expanded);
+            const noteY = noteToY(n, trackTop, trackHeight, track);
             
             let noteHeight;
             if (track.expanded) {
@@ -236,7 +252,7 @@ export function initInteraction(canvasEl) {
             let scaleIndex = null;
             
             if (clickedTrack.expanded) {
-                noteVal = yToNote(clickY, trackTop, trackHeight);
+                noteVal = yToNote(clickY, trackTop, trackHeight, clickedTrack);
                 if (clickedTrack.type === 'drums') {
                     const midi = Tone.Frequency(noteVal).toMidi();
                     if (midi >= 40) noteVal = 'F#2'; // Hat
@@ -317,7 +333,7 @@ export function initInteraction(canvasEl) {
             // Update pitch
             let newNoteVal;
             if (track.expanded) {
-                newNoteVal = yToNote(currentY, trackTop, trackHeight);
+                newNoteVal = yToNote(currentY, trackTop, trackHeight, track);
                 if (track.type === 'drums') {
                     const midi = Tone.Frequency(newNoteVal).toMidi();
                     if (midi >= 40) newNoteVal = 'F#2';

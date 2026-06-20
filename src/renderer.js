@@ -115,14 +115,26 @@ function render(time) {
                 ctx.stroke();
             }
         } else {
-            // Draw faint grid for continuous piano roll
-            ctx.strokeStyle = 'rgba(0,0,0,0.02)';
-            ctx.lineWidth = 1;
-            for (let i = 1; i < 12; i++) {
-                const laneY = trackTop + (i * (trackHeight / 12));
+            // Draw 24-note piano roll grid
+            const baseMidi = track.baseMidi || 48;
+            for (let i = 0; i < 24; i++) {
+                const midi = baseMidi + i;
+                const noteInOctave = midi % 12;
+                const isBlackKey = [1, 3, 6, 8, 10].includes(noteInOctave);
+                
+                const yBottom = trackTop + ((1.0 - (i / 24)) * trackHeight);
+                const yTop = trackTop + ((1.0 - ((i + 1) / 24)) * trackHeight);
+                
+                if (isBlackKey) {
+                    ctx.fillStyle = 'rgba(0,0,0,0.03)';
+                    ctx.fillRect(0, yTop, canvas.width, yBottom - yTop);
+                }
+                
+                ctx.strokeStyle = 'rgba(0,0,0,0.02)';
+                ctx.lineWidth = 1;
                 ctx.beginPath();
-                ctx.moveTo(0, laneY);
-                ctx.lineTo(canvas.width, laneY);
+                ctx.moveTo(0, yTop);
+                ctx.lineTo(canvas.width, yTop);
                 ctx.stroke();
             }
         }
@@ -158,10 +170,9 @@ function render(time) {
         const noteSecs = Tone.Time(note.time).toSeconds() % loopDur;
         const noteX = (noteSecs / loopDur) * canvas.width;
         
-        const durSecs = Tone.Time(note.duration).toSeconds();
-        const noteWidth = (durSecs / loopDur) * canvas.width;
-        
-        const noteY = noteToY(note, trackTop, trackHeight, track.expanded);
+        const noteY = noteToY(note, trackTop, trackHeight, track);
+        const noteDur = Tone.Time(note.duration).toSeconds();
+        const noteWidth = (noteDur / loopDur) * canvas.width;
         
         let noteHeight;
         if (track.expanded) {

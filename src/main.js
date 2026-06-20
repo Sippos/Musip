@@ -239,7 +239,8 @@ trackOptBtns.forEach(btn => {
             color: color,
             type: type,
             muted: false,
-            expanded: false
+            expanded: false,
+            baseMidi: type === 'drums' ? 36 : 48
         };
         
         state.tracks.push(newTrack);

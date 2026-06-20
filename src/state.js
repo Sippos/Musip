@@ -48,9 +48,9 @@ export function getPreset(id) {
 export const state = {
     activeTrackId: 'track-1',
     tracks: [
-        { id: 'track-1', name: 'Bass', presetId: 'bass-square', color: '#A8E6CF', type: 'synth' },
-        { id: 'track-2', name: 'Keys', presetId: 'keys-sine', color: '#FFD3B6', type: 'synth' },
-        { id: 'track-3', name: 'Drums', presetId: 'drums-kit', color: '#FFAAA5', type: 'drums' }
+        { id: 'track-1', name: 'Bass', presetId: 'bass-square', color: '#A8E6CF', type: 'synth', baseMidi: 36 },
+        { id: 'track-2', name: 'Keys', presetId: 'keys-sine', color: '#FFD3B6', type: 'synth', baseMidi: 48 },
+        { id: 'track-3', name: 'Drums', presetId: 'drums-kit', color: '#FFAAA5', type: 'drums', baseMidi: 36 }
     ],
     notes: [], // { trackId, note, time, duration, id, scaleIndex }
     isPlaying: false,

@@ -40,7 +40,7 @@ export async function importMidiFile(file, renderTrackTabs) {
         const addSplitTrack = (notes, name, preset, colorIdx) => {
             if (notes.length === 0) return;
             const trackId = `track-${generateId()}`;
-            state.tracks.push({ id: trackId, name: name, presetId: preset, color: colors[colorIdx % colors.length], type: 'synth', expanded: false, muted: false });
+            state.tracks.push({ id: trackId, name: name, presetId: preset, color: colors[colorIdx % colors.length], type: 'synth', expanded: false, muted: false, baseMidi: preset.includes('bass') ? 36 : 48 });
             
             notes.forEach(note => {
                 state.notes.push({
@@ -71,7 +71,8 @@ export async function importMidiFile(file, renderTrackTabs) {
                 color: colors[colorIdx % colors.length],
                 type: isDrums ? 'drums' : 'synth',
                 expanded: false,
-                muted: false
+                muted: false,
+                baseMidi: isDrums ? 36 : 48
             });
             colorIdx++;
             
@@ -101,7 +102,7 @@ export async function importMidiFile(file, renderTrackTabs) {
         state.activeTrackId = state.tracks[newTracksStartIdx].id; // Select the first newly added track
     } else if (state.tracks.length === 0) {
         // Fallback if empty
-        state.tracks.push({ id: 'track-1', name: 'Bass', presetId: 'bass-square', color: '#A8E6CF', type: 'synth', expanded: false, muted: false });
+        state.tracks.push({ id: 'track-1', name: 'Bass', presetId: 'bass-square', color: '#A8E6CF', type: 'synth', expanded: false, muted: false, baseMidi: 36 });
         state.activeTrackId = 'track-1';
         initTrackSynth('track-1', getPreset('bass-square'));
     }
