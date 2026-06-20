@@ -112,6 +112,48 @@ export function initInteraction(canvasEl) {
     let dragNoteIndex = -1;
     let dragOffsets = [];
     let dragStartNoteSecs = 0;
+    
+    // Auto-scroll state
+    let autoScrollDir = 0; // -1 for up (decrease midi), 1 for down (increase midi)
+    let autoScrollTrackLayout = null;
+    let autoScrollRAF = null;
+    let currentMouseX = 0;
+    let currentMouseY = 0;
+    
+    function doAutoScroll() {
+        if (!dragMode || !dragNote || autoScrollDir === 0 || !autoScrollTrackLayout) {
+            autoScrollRAF = null;
+            return;
+        }
+        
+        const trLayout = autoScrollTrackLayout;
+        let scrolled = false;
+        if (autoScrollDir === -1 && trLayout.track.baseMidi < 84) {
+            trLayout.track.baseMidi += 1;
+            dragStartY += (trLayout.height / 24);
+            scrolled = true;
+        } else if (autoScrollDir === 1 && trLayout.track.baseMidi > 12) {
+            trLayout.track.baseMidi -= 1;
+            dragStartY -= (trLayout.height / 24);
+            scrolled = true;
+        }
+        
+        if (scrolled) {
+            // Re-trigger the pitch calculation logic
+            window.dispatchEvent(new MouseEvent('mousemove', {
+                clientX: currentMouseX,
+                clientY: currentMouseY
+            }));
+        }
+        
+        // Loop every ~50ms for smooth but controlled scroll
+        setTimeout(() => {
+            if (autoScrollDir !== 0) {
+                autoScrollRAF = requestAnimationFrame(doAutoScroll);
+            }
+        }, 50);
+    }
+
 
     
     // Prevent context menu to allow right-click erasing
@@ -342,6 +384,9 @@ export function initInteraction(canvasEl) {
     });
     
     window.addEventListener('mousemove', (e) => {
+        currentMouseX = e.clientX;
+        currentMouseY = e.clientY;
+        
         if (!dragMode) return;
         
         const activeTrack = getActiveTrack();
@@ -403,14 +448,25 @@ export function initInteraction(canvasEl) {
                 const trLayout = layout.find(l => l.track.id === dragNote.trackId);
                 if (trLayout && trLayout.track.expanded && trLayout.track.type !== 'drums') {
                     const edgeThreshold = 30; // pixels
-                    if (currentY < trLayout.top + edgeThreshold && trLayout.track.baseMidi < 84) {
-                        trLayout.track.baseMidi += 1;
-                        // Adjust dragStartY so the note stays under cursor visually
-                        dragStartY += (trLayout.height / 24); 
-                    } else if (currentY > trLayout.bottom - edgeThreshold && trLayout.track.baseMidi > 12) {
-                        trLayout.track.baseMidi -= 1;
-                        dragStartY -= (trLayout.height / 24);
+                    const visibleTop = Math.max(0, trLayout.top);
+                    const visibleBottom = Math.min(canvasEl.height, trLayout.bottom);
+                    
+                    let newDir = 0;
+                    if (currentY < visibleTop + edgeThreshold) {
+                        newDir = -1; // Scroll up view (higher notes)
+                    } else if (currentY > visibleBottom - edgeThreshold) {
+                        newDir = 1; // Scroll down view (lower notes)
                     }
+                    
+                    if (newDir !== autoScrollDir) {
+                        autoScrollDir = newDir;
+                        autoScrollTrackLayout = trLayout;
+                        if (autoScrollDir !== 0 && !autoScrollRAF) {
+                            autoScrollRAF = requestAnimationFrame(doAutoScroll);
+                        }
+                    }
+                } else {
+                    autoScrollDir = 0;
                 }
             }
             
@@ -468,6 +524,9 @@ export function initInteraction(canvasEl) {
             dragNote = null;
             dragNoteIndex = -1;
             dragOffsets = [];
+            
+            autoScrollDir = 0;
+            autoScrollRAF = null;
         }
     });
 }
