@@ -136,6 +136,13 @@ function render(time) {
                 ctx.moveTo(0, yTop);
                 ctx.lineTo(canvas.width, yTop);
                 ctx.stroke();
+                
+                // Draw C note labels to avoid "infinite loop" feeling
+                if (noteInOctave === 0 && track.type !== 'drums') {
+                    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                    ctx.font = '10px sans-serif';
+                    ctx.fillText(`C${Math.floor(midi / 12) - 1}`, 5, yBottom - 3);
+                }
             }
         }
         
