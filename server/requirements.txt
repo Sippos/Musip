@@ -1,0 +1,20 @@
+# Install with:  pip install -r requirements.txt
+#
+# torch/torchaudio are pulled from PyTorch's CPU index so you get the small
+# CPU-only builds (the default PyPI wheels drag in multiple GB of CUDA
+# libraries). The extra index serves everything else from PyPI. For GPU
+# separation, install the matching CUDA torch/torchaudio instead and set
+# device="cuda" in app.py.
+#
+# Also required on PATH (not pip-installable here): ffmpeg AND ffprobe — Demucs
+# shells out to both to decode the upload. Install via your OS package manager,
+# or `pip install static-ffmpeg` and symlink its ffmpeg/ffprobe onto PATH.
+--index-url https://download.pytorch.org/whl/cpu
+--extra-index-url https://pypi.org/simple
+
+torch
+torchaudio
+demucs
+fastapi
+uvicorn[standard]
+python-multipart

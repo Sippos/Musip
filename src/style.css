@@ -33,7 +33,6 @@ body, html {
     pointer-events: none; /* Let clicks pass through to canvas */
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
     padding: 2rem;
     z-index: 10;
 }
@@ -85,6 +84,10 @@ header {
 .tool-btn {
     width: 36px;
     height: 36px;
+    /* Must zero the global button padding: with box-sizing:border-box the
+       inherited 1.2rem side padding exceeds the 36px width and collapses the
+       icon's box to zero, hiding the SVG. */
+    padding: 0;
     border-radius: 50%;
     border: none;
     background: transparent;
@@ -101,10 +104,17 @@ header {
     color: #333;
 }
 
+/* Active = "on": the icon itself turns green on a soft green tint, so the
+   rectangle / magnet shape stays clearly visible (a solid green fill would
+   swallow the thin strokes and just read as a plain circle). */
 .tool-btn.active {
-    background: #fff;
-    color: #ffb7b2;
-    box-shadow: inset 1px 1px 3px rgba(0,0,0,0.1);
+    background: rgba(27,158,110,0.15);
+    color: #1b9e6e;
+    box-shadow: none;
+}
+.tool-btn.active:hover {
+    background: rgba(27,158,110,0.22);
+    color: #178a60;
 }
 
 .nav-divider {
@@ -180,6 +190,10 @@ button:hover {
 }
 
 #controls {
+    /* Pushed to the bottom of the column; the reference waveform bar follows
+       directly below it so the track tabs always sit just above the waveform
+       (instead of jumping to the vertical middle when the bar appears). */
+    margin-top: auto;
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
@@ -190,6 +204,26 @@ button:hover {
 #controls.hidden {
     opacity: 0;
     pointer-events: none;
+}
+
+#reference-bar {
+    display: flex;
+    align-items: center;
+    pointer-events: auto;
+    margin-top: 0.75rem;
+}
+
+#reference-bar.hidden {
+    display: none;
+}
+
+#reference-wave {
+    flex: 1;
+    min-width: 0;
+    height: 56px;
+    background: rgba(0, 0, 0, 0.03);
+    border-radius: 0.5rem;
+    cursor: ew-resize;
 }
 
 .instrument-selector {
@@ -214,6 +248,25 @@ button:hover {
     color: white;
 }
 
+/* Trailing "+" tile in the track row — adds a new instrument track. */
+.add-track-tile {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.9rem;
+    color: rgba(0,0,0,0.45);
+    border: 1.5px dashed rgba(0,0,0,0.2);
+    align-self: stretch;
+}
+.add-track-tile:hover {
+    color: var(--text-color);
+    border-color: rgba(0,0,0,0.4);
+    background: rgba(0,0,0,0.03);
+    transform: none;
+    box-shadow: none;
+}
+.add-track-label { font-size: 0.8rem; font-weight: 600; }
+
 .controls-left {
     display: flex;
     align-items: center;
@@ -223,6 +276,55 @@ button:hover {
 .controls-right {
     display: flex;
     gap: 1rem;
+    align-items: center;
+}
+
+/* Bottom-right "Menu" dropdown (Presets / Import / Export). */
+.more-menu-wrap {
+    position: relative;
+}
+
+#more-menu-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.more-menu {
+    position: absolute;
+    bottom: calc(100% + 0.5rem);
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.4rem;
+    min-width: 13rem;
+    background: #f7f6f1;
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 1rem;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    pointer-events: auto;
+    z-index: 20;
+}
+
+.more-menu.hidden {
+    display: none;
+}
+
+.more-menu-item {
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    border-radius: 0.6rem;
+    padding: 0.6rem 0.8rem;
+    backdrop-filter: none;
+}
+
+.more-menu-item:hover {
+    background: rgba(0,0,0,0.06);
+    transform: none;
+    box-shadow: none;
 }
 
 #share-notification {
@@ -290,47 +392,41 @@ button:hover {
     color: rgba(0,0,0,0.6);
 }
 
-/* Magic Pad */
-#magic-pad {
-    width: 100%;
-    height: 200px;
-    background: linear-gradient(135deg, rgba(0,0,0,0.03), rgba(0,0,0,0.08));
-    border-radius: 1rem;
-    position: relative;
-    cursor: crosshair;
-    overflow: hidden;
-    touch-action: none; /* Prevent scrolling while dragging on mobile */
+/* Sound macro knobs */
+#synth-controls.hidden,
+#drum-controls.hidden,
+#osc-wave-section.hidden {
+    display: none;
 }
 
-#magic-dot {
-    width: 24px;
-    height: 24px;
-    background: white;
-    border: 3px solid #2D3436;
-    border-radius: 50%;
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    pointer-events: none;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-    transition: transform 0.05s linear;
+.macro-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
 }
 
-.pad-label {
-    position: absolute;
-    font-size: 0.75rem;
-    color: rgba(0,0,0,0.4);
+.macro-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 0.85rem;
+    margin-bottom: 0.35rem;
+}
+
+.macro-label > span:first-child {
     font-weight: 600;
-    pointer-events: none;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
 }
 
-.pad-label.top { top: 0.5rem; left: 50%; transform: translateX(-50%); }
-.pad-label.bottom { bottom: 0.5rem; left: 50%; transform: translateX(-50%); }
-.pad-label.left { left: 0.5rem; top: 50%; transform: translateY(-50%) rotate(-90deg); transform-origin: left center; }
-.pad-label.right { right: 0.5rem; top: 50%; transform: translateY(-50%) rotate(90deg); transform-origin: right center; }
+.macro-hint {
+    font-size: 0.7rem;
+    color: rgba(0,0,0,0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.macro-slider, .drum-slider {
+    width: 100%;
+}
 
 /* Canvas */
 #sequencer {
@@ -398,8 +494,163 @@ button:hover {
     pointer-events: none;
 }
 
+/* Welcome choice: take the tour vs. start fresh */
+.welcome-tagline {
+    text-align: center;
+    font-size: 0.95rem;
+    line-height: 1.45;
+    opacity: 0.7;
+    margin-bottom: 1.5rem;
+}
+
+.welcome-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.welcome-btn {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    text-align: left;
+    padding: 1rem 1.25rem;
+    border-radius: 1rem;
+    background: rgba(0,0,0,0.03);
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.welcome-btn:hover {
+    background: rgba(0,0,0,0.05);
+    transform: translateY(-2px);
+    border-color: rgba(0,0,0,0.1);
+}
+
+.welcome-btn strong {
+    font-size: 1.05rem;
+}
+
+.welcome-btn span {
+    font-size: 0.85rem;
+    opacity: 0.65;
+}
+
+.welcome-btn-primary {
+    background: var(--text-color);
+    color: var(--bg-color);
+}
+
+.welcome-btn-primary:hover {
+    background: var(--text-color);
+    border-color: rgba(0,0,0,0.2);
+}
+
+.welcome-btn-primary span {
+    opacity: 0.8;
+}
+
+/* Guided tour: dim overlay + spotlight ring + coach-mark bubble */
+#tour-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    pointer-events: none; /* clicks pass through to the highlighted UI */
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
+
+#tour-overlay.visible {
+    opacity: 1;
+}
+
+/* Stand aside while a modal/menu the step points at is open: hide the dim and,
+   crucially, stop the bubble from catching clicks meant for those controls. */
+#tour-overlay.suppressed {
+    visibility: hidden;
+}
+
+#tour-spotlight {
+    position: absolute;
+    border-radius: 0.9rem;
+    box-shadow: 0 0 0 9999px rgba(20, 24, 28, 0.55),
+                0 0 0 3px rgba(27, 158, 110, 0.9);
+    transition: left 0.25s ease, top 0.25s ease, width 0.25s ease, height 0.25s ease, opacity 0.2s ease;
+    pointer-events: none;
+}
+
+#tour-bubble {
+    position: absolute;
+    width: min(340px, 90vw);
+    background: white;
+    border-radius: 1.1rem;
+    padding: 1.25rem 1.4rem;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.18);
+    pointer-events: auto;
+    transition: left 0.25s ease, top 0.25s ease;
+}
+
+.tour-bubble-counter {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: rgba(27, 158, 110, 1);
+    margin-bottom: 0.4rem;
+}
+
+.tour-bubble-title {
+    font-size: 1.15rem;
+    margin-bottom: 0.5rem;
+}
+
+.tour-bubble-body {
+    font-size: 0.92rem;
+    line-height: 1.5;
+    opacity: 0.8;
+    margin-bottom: 1rem;
+}
+
+.tour-bubble-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.tour-btn-primary {
+    padding: 0.5rem 1.1rem;
+    border-radius: 0.7rem;
+    background: var(--text-color);
+    color: var(--bg-color);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+}
+
+.tour-link {
+    background: none;
+    border: none;
+    font-size: 0.85rem;
+    cursor: pointer;
+    color: var(--text-color);
+    opacity: 0.55;
+    padding: 0.3rem 0.4rem;
+    font-family: inherit;
+}
+
+.tour-link:hover {
+    opacity: 0.9;
+}
+
+.tour-exit {
+    margin-left: auto;
+}
+
 /* Add Track Modal */
-#add-track-modal {
+#add-track-modal,
+#presets-modal {
     position: absolute;
     top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(250, 249, 246, 0.8);
@@ -412,7 +663,8 @@ button:hover {
     transition: opacity 0.3s ease;
 }
 
-#add-track-modal.hidden {
+#add-track-modal.hidden,
+#presets-modal.hidden {
     opacity: 0;
     pointer-events: none;
 }
@@ -447,4 +699,276 @@ button:hover {
     background: rgba(0,0,0,0.05);
     transform: translateY(-2px);
     border-color: rgba(0,0,0,0.1);
+}
+
+/* Presets modal: wider, scrollable, card grids for beats + chord progressions. */
+#presets-modal .presets-content {
+    background: white;
+    padding: 2.25rem 2.5rem;
+    border-radius: 1.5rem;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+    position: relative;
+    max-width: 640px;
+    width: 90%;
+    max-height: 85vh;
+    overflow-y: auto;
+    text-align: left;
+}
+
+.presets-sub {
+    margin: 0.4rem 0 1.25rem;
+    opacity: 0.6;
+    font-size: 0.9rem;
+}
+
+.presets-group-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 1.25rem 0 0.75rem;
+    font-size: 1rem;
+}
+.presets-group-title svg { opacity: 0.7; }
+
+.preset-key-hint {
+    margin: -0.4rem 0 0.75rem;
+    font-size: 0.8rem;
+    opacity: 0.6;
+}
+
+.preset-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 0.75rem;
+}
+
+.preset-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.15rem;
+    padding: 0.9rem 1rem;
+    border-radius: 1rem;
+    background: rgba(0,0,0,0.03);
+    border: 2px solid transparent;
+    transition: all 0.2s ease;
+    text-align: left;
+    cursor: pointer;
+}
+
+.preset-card:hover {
+    background: rgba(0,0,0,0.05);
+    transform: translateY(-2px);
+    border-color: rgba(0,0,0,0.1);
+}
+
+.preset-card .preset-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    margin-bottom: 0.35rem;
+    border-radius: 0.6rem;
+    background: rgba(0,0,0,0.05);
+    color: var(--text-color);
+}
+.preset-card strong { font-size: 0.9rem; }
+.preset-card .preset-desc { font-size: 0.75rem; opacity: 0.55; }
+
+/* "Learn a Song" — the primary entry point, emphasized over the other controls. */
+.primary-btn {
+    background: #2D3436;
+    color: #FAF9F6;
+    border-color: #2D3436;
+    font-weight: 600;
+}
+.primary-btn:hover {
+    background: #1f2628;
+    color: #fff;
+}
+
+/* Detected key + tempo readout in the toolbar. */
+/* Tempo + key controls in the toolbar. Editable: BPM field (scroll / ± to
+   nudge) and a key dropdown. Both drive the loop, bar grid and Scale Snap. */
+.song-readout {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-color);
+    background: rgba(0,0,0,0.06);
+    padding: 0.15rem 0.5rem;
+    border-radius: 1rem;
+    white-space: nowrap;
+}
+.song-readout.hidden { display: none; }
+
+.readout-field {
+    display: flex;
+    align-items: center;
+    gap: 0.1rem;
+}
+
+.readout-input {
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-color);
+    background: transparent;
+    border: none;
+    border-radius: 0.5rem;
+    padding: 0.15rem 0.2rem;
+    cursor: pointer;
+}
+.readout-input:hover { background: rgba(0,0,0,0.05); }
+.readout-input:focus { outline: none; background: rgba(255,255,255,0.7); }
+
+#bpm-input {
+    width: 2.6rem;
+    text-align: right;
+    cursor: ns-resize; /* hint that scrolling nudges the tempo */
+    -moz-appearance: textfield;
+}
+#bpm-input::-webkit-outer-spin-button,
+#bpm-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.readout-unit {
+    font-size: 0.65rem;
+    letter-spacing: 0.03em;
+    opacity: 0.6;
+}
+
+/* Zero the global button padding so the ± steppers stay tiny circles. */
+.readout-step {
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.07);
+    color: #555;
+    font-size: 0.9rem;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.readout-step:hover { background: rgba(0,0,0,0.14); color: #222; }
+
+.readout-sep { opacity: 0.4; }
+
+.key-select {
+    -moz-appearance: none;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+/* Transcription progress overlay shown while "Learn a Song" runs. */
+#transcribe-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(250, 249, 246, 0.85);
+    backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+}
+#transcribe-overlay.hidden { display: none; }
+.transcribe-card {
+    background: #fff;
+    border-radius: 1rem;
+    padding: 2rem 2.5rem;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+    text-align: center;
+    max-width: 420px;
+}
+.transcribe-card h3 { margin-bottom: 1.2rem; font-weight: 600; }
+.transcribe-bar {
+    width: 280px;
+    height: 8px;
+    border-radius: 4px;
+    background: rgba(0,0,0,0.08);
+    overflow: hidden;
+    margin: 0 auto;
+}
+#transcribe-fill {
+    height: 100%;
+    width: 0%;
+    background: #2D3436;
+    border-radius: 4px;
+    transition: width 0.2s ease;
+}
+.transcribe-card p {
+    margin-top: 1rem;
+    font-size: 0.85rem;
+    opacity: 0.6;
+}
+
+/* "Trim to a loop" crop modal shown before stem separation runs. */
+#clip-crop-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(250, 249, 246, 0.85);
+    backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+}
+#clip-crop-modal.hidden { display: none; }
+.clip-crop-content {
+    background: #fff;
+    padding: 2rem 2.25rem;
+    border-radius: 1.25rem;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+    max-width: 640px;
+    width: 90%;
+    text-align: center;
+}
+.clip-crop-content h3 { margin-bottom: 0.6rem; font-weight: 600; }
+.clip-crop-hint {
+    font-size: 0.85rem;
+    opacity: 0.65;
+    margin-bottom: 1.2rem;
+}
+#clip-crop-wave {
+    display: block;
+    width: 100%;
+    height: 120px;
+    background: rgba(0,0,0,0.03);
+    border-radius: 0.6rem;
+    cursor: grab;
+    touch-action: none;
+}
+.clip-crop-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.25rem;
+    margin: 1.1rem 0;
+    font-size: 0.85rem;
+}
+.clip-crop-controls label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.clip-crop-controls input {
+    width: 4.5rem;
+    padding: 0.3rem 0.4rem;
+    border-radius: 0.4rem;
+    border: 1px solid rgba(0,0,0,0.15);
+}
+#clip-crop-readout { opacity: 0.6; }
+.clip-crop-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
 }

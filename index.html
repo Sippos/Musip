@@ -16,9 +16,22 @@
             
             <div class="top-nav">
                 <div class="toolbar">
-                    <button id="tool-select" class="tool-btn" title="Toggle Select Mode (S)">
-                        <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-dasharray="2 2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>
+                    <button id="tool-select" class="tool-btn" title="Select mode: off — drag to select notes (S)">
+                        <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="6" width="16" height="12" rx="2.5"></rect></svg>
                     </button>
+                    <button id="tool-scale-lock" class="tool-btn active" title="Scale snap: on — new notes snap to the song's key">
+                        <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v7a5 5 0 0 0 10 0V4"></path><line x1="4" y1="4" x2="10" y2="4"></line><line x1="14" y1="4" x2="20" y2="4"></line></svg>
+                    </button>
+                </div>
+                <div class="song-readout" title="Tempo &amp; key — drive the loop length, bar grid and Scale Snap. Set by 'Learn a Song' or edit them here.">
+                    <div class="readout-field bpm-field">
+                        <button id="bpm-down" class="readout-step" title="Slower" tabindex="-1">−</button>
+                        <input id="bpm-input" class="readout-input" type="number" min="20" max="300" step="1" inputmode="numeric" title="Beats per minute — scroll or use ± to change. Sets the loop length and bar grid.">
+                        <span class="readout-unit">BPM</span>
+                        <button id="bpm-up" class="readout-step" title="Faster" tabindex="-1">+</button>
+                    </div>
+                    <span class="readout-sep">·</span>
+                    <select id="key-select" class="readout-input key-select" title="Song key — notes snap to this scale when Scale Snap is on, and in-key rows are highlighted."></select>
                 </div>
                 <div class="nav-divider"></div>
                 <button id="btn-visual-pulse" class="nav-icon" title="Toggle Visual Pulse">
@@ -27,10 +40,20 @@
                 <button id="btn-audio-pulse" class="nav-icon" title="Toggle Audio Metronome">
                     <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
                 </button>
+                <div class="nav-divider"></div>
+                <button id="undo-btn" class="nav-icon" title="Undo (Ctrl+Z)">
+                    <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg>
+                </button>
+                <button id="redo-btn" class="nav-icon" title="Redo (Ctrl+Shift+Z)">
+                    <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"></path><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"></path></svg>
+                </button>
+                <div class="nav-divider"></div>
+                <button id="tour-replay-btn" class="nav-icon" title="Take the tour">
+                    <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                </button>
             </div>
             
             <div class="header-right">
-                <button id="add-track-btn" class="secondary-btn" title="Add Track">Add Track</button>
                 <p id="status-text">Press Start to unlock audio.</p>
                 <button id="start-btn">Start Session</button>
             </div>
@@ -43,18 +66,41 @@
                         <!-- Rendered dynamically -->
                     </div>
                 </div>
-                <div class="divider"></div>
-                <button id="tweak-btn" class="secondary-btn">Tweak Sound</button>
             </div>
             
             <div class="controls-right">
-                <button id="undo-btn">Undo (Ctrl+Z)</button>
+                <input type="file" id="song-upload" accept="audio/*" style="display: none;">
+                <button id="learn-song-btn" class="primary-btn" title="Drop an mp3: the app splits it into stems, transcribes each part, detects key &amp; tempo, and loads it as a reference to recreate.">Learn a Song</button>
                 <input type="file" id="midi-upload" accept=".mid,.midi" style="display: none;">
-                <button id="import-midi-btn">Import MIDI</button>
-                <button id="export-btn">Export Tape</button>
+                <input type="file" id="reference-upload" accept="audio/*" style="display: none;">
+
+                <div class="more-menu-wrap">
+                    <button id="more-menu-btn" class="secondary-btn" title="Presets, import &amp; export" aria-haspopup="true" aria-expanded="false">
+                        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"></line><line x1="4" y1="12" x2="20" y2="12"></line><line x1="4" y1="18" x2="20" y2="18"></line></svg>
+                        <span>Menu</span>
+                    </button>
+                    <div id="more-menu" class="more-menu hidden" role="menu">
+                        <button id="presets-btn" class="more-menu-item" role="menuitem" title="Drop in a ready-made drum beat or chord progression to start from instead of a blank grid.">Presets</button>
+                        <button id="import-midi-btn" class="more-menu-item" role="menuitem">Import MIDI</button>
+                        <button id="import-reference-btn" class="more-menu-item" role="menuitem">Import Reference Audio</button>
+                        <button id="export-btn" class="more-menu-item" role="menuitem">Export Tape</button>
+                    </div>
+                </div>
             </div>
         </div>
-        
+
+        <div id="reference-bar" class="hidden" style="gap: 0.75rem; padding: 0.5rem 1.5rem; font-size: 0.85rem; opacity: 0.85;">
+            <span id="reference-name" style="font-weight: 600; flex-shrink: 0;"></span>
+            <button id="reference-mute-btn" class="nav-icon" style="flex-shrink: 0;" title="Mute/Unmute Reference">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+            </button>
+            <canvas id="reference-wave" title="Drag to align the loop window with the song"></canvas>
+            <label style="display: flex; align-items: center; gap: 0.4rem; flex-shrink: 0;">
+                Start (s)
+                <input type="number" id="reference-offset" min="0" step="0.1" value="0" style="width: 4.5rem;">
+            </label>
+        </div>
+
         <div id="tweak-panel" class="hidden">
             <div class="tweak-header">
                 <h3>Sound Settings</h3>
@@ -63,43 +109,69 @@
                 </button>
             </div>
             
-            <div class="tweak-section">
-                <canvas id="tweak-wave-canvas" width="250" height="80" style="background: rgba(0,0,0,0.03); border-radius: 0.5rem; margin-bottom: 1rem; width: 100%; display: block; cursor: pointer;" title="Click to change Waveform"></canvas>
-                <p style="font-size: 0.85rem; color: rgba(0,0,0,0.6); margin-bottom: 0.5rem; text-align: center;">Drag the dot to find your sound</p>
-                <div id="magic-pad">
-                    <div id="magic-dot"></div>
-                    <div class="pad-label top">Short</div>
-                    <div class="pad-label bottom">Long</div>
-                    <div class="pad-label left">Soft</div>
-                    <div class="pad-label right">Hard</div>
+            <!-- Synth sound controls -->
+            <div id="synth-controls">
+                <div class="tweak-section">
+                    <label class="macro-label" style="display:block; margin-bottom:0.4rem;"><span>Instrument</span><span class="macro-hint" id="instrument-mode-hint">recorded · realistic</span></label>
+                    <select id="instrument-select" style="width:100%; padding:0.5rem; border-radius:0.5rem; border:1px solid rgba(0,0,0,0.15); background:#fff; font-size:0.9rem;"></select>
+                    <button id="load-soundfont-btn" class="secondary-btn" style="width:100%; margin-top:0.5rem;">Load SoundFont (.sf2)…</button>
+                    <input type="file" id="soundfont-upload" accept=".sf2,.sf3,.dls,.sfogg" style="display:none;">
                 </div>
+                <!-- Hidden for SoundFont tracks: the preset defines the timbre, so
+                     the oscillator wave + macro knobs don't apply. -->
+                <div id="designed-controls">
+                <div id="osc-wave-section" class="tweak-section">
+                    <canvas id="tweak-wave-canvas" width="250" height="80" style="background: rgba(0,0,0,0.03); border-radius: 0.5rem; margin-bottom: 0.5rem; width: 100%; display: block; cursor: pointer;" title="Click to change Waveform"></canvas>
+                    <p style="font-size: 0.85rem; color: rgba(0,0,0,0.6); margin-bottom: 0.5rem; text-align: center;">Click the wave to change shape · drag the knobs to taste</p>
+                </div>
+
+                <div class="tweak-section macro-grid">
+                    <div class="slider-row">
+                        <label class="macro-label"><span>Body</span><span class="macro-hint">fuller · longer</span></label>
+                        <input type="range" id="macro-body" class="macro-slider" data-macro="body" min="0" max="1" step="0.01">
+                    </div>
+                    <div class="slider-row">
+                        <label class="macro-label"><span>Bite</span><span class="macro-hint">brighter · edgier</span></label>
+                        <input type="range" id="macro-bite" class="macro-slider" data-macro="bite" min="0" max="1" step="0.01">
+                    </div>
+                    <div class="slider-row">
+                        <label class="macro-label"><span>Air</span><span class="macro-hint">roomy · washed</span></label>
+                        <input type="range" id="macro-air" class="macro-slider" data-macro="air" min="0" max="1" step="0.01">
+                    </div>
+                    <div class="slider-row">
+                        <label class="macro-label"><span>Punch</span><span class="macro-hint">soft · snappy</span></label>
+                        <input type="range" id="macro-punch" class="macro-slider" data-macro="punch" min="0" max="1" step="0.01">
+                    </div>
+                    <div class="slider-row">
+                        <label class="macro-label"><span>Wobble</span><span class="macro-hint">vibrato</span></label>
+                        <input type="range" id="macro-wobble" class="macro-slider" data-macro="wobble" min="0" max="1" step="0.01">
+                    </div>
+                </div>
+
+                <hr style="border:none; border-top:1px solid rgba(0,0,0,0.1); margin: 1rem 0;">
+
+                <div class="tweak-section">
+                    <button id="save-preset-btn" class="secondary-btn" style="width: 100%;">Save as Preset</button>
+                </div>
+                </div><!-- /#designed-controls -->
             </div>
-            
-            <div class="tweak-section" style="margin-top: 1.5rem;">
-                <div class="slider-row" style="margin-bottom: 1rem;">
-                    <label style="display: flex; justify-content: space-between; font-size: 0.85rem; opacity: 0.7; margin-bottom: 0.5rem;">
-                        <span>Brightness</span>
-                    </label>
-                    <input type="range" id="brightness-slider" min="0" max="1" step="0.01" style="width: 100%;">
+
+            <!-- Drum tuning controls -->
+            <div id="drum-controls" class="hidden">
+                <div class="tweak-section macro-grid">
+                    <div class="slider-row">
+                        <label class="macro-label"><span>Kick Pitch</span><span class="macro-hint">deep · high</span></label>
+                        <input type="range" id="drum-kickPitch" class="drum-slider" data-drum="kickPitch" min="0" max="1" step="0.01">
+                    </div>
+                    <div class="slider-row">
+                        <label class="macro-label"><span>Boom</span><span class="macro-hint">tight · boomy</span></label>
+                        <input type="range" id="drum-boom" class="drum-slider" data-drum="boom" min="0" max="1" step="0.01">
+                    </div>
+                    <div class="slider-row">
+                        <label class="macro-label"><span>Snap</span><span class="macro-hint">loose · tight</span></label>
+                        <input type="range" id="drum-snap" class="drum-slider" data-drum="snap" min="0" max="1" step="0.01">
+                    </div>
                 </div>
-                <div class="slider-row" style="margin-bottom: 1rem;">
-                    <label style="display: flex; justify-content: space-between; font-size: 0.85rem; opacity: 0.7; margin-bottom: 0.5rem;">
-                        <span>Space</span>
-                    </label>
-                    <input type="range" id="space-slider" min="0" max="1" step="0.01" style="width: 100%;">
-                </div>
-                <div class="slider-row">
-                    <label style="display: flex; justify-content: space-between; font-size: 0.85rem; opacity: 0.7; margin-bottom: 0.5rem;">
-                        <span>Dirt</span>
-                    </label>
-                    <input type="range" id="dirt-slider" min="0" max="1" step="0.01" style="width: 100%;">
-                </div>
-            </div>
-            
-            <hr style="border:none; border-top:1px solid rgba(0,0,0,0.1); margin: 1rem 0;">
-            
-            <div class="tweak-section">
-                <button id="save-preset-btn" class="secondary-btn" style="width: 100%;">Save as Preset</button>
             </div>
         </div>
         
@@ -107,22 +179,47 @@
         
         <div id="onboarding">
             <h2>Welcome to Musip.</h2>
-            <div class="step">
-                <span class="step-num">1</span>
-                <p><strong>Play the Keys:</strong> Use A, S, D, F, G to play notes.</p>
+            <p class="welcome-tagline">Build a song out of looping layers — add tracks, place notes, and shape the sound.</p>
+            <div class="welcome-actions">
+                <button id="welcome-tour-btn" class="welcome-btn welcome-btn-primary">
+                    <strong>Take the tour</strong>
+                    <span>First time? We'll build a loop together, step by step.</span>
+                </button>
+                <button id="welcome-fresh-btn" class="welcome-btn">
+                    <strong>Start fresh</strong>
+                    <span>Jump straight in with a few starter tracks.</span>
+                </button>
             </div>
-            <div class="step">
-                <span class="step-num">2</span>
-                <p><strong>Draw, Drag & Erase:</strong> Click to draw. Hold & drag to move or lengthen notes. <strong>Right-click</strong> to erase.</p>
-            </div>
-            <div class="step">
-                <span class="step-num">3</span>
-                <p><strong>Switch Sounds:</strong> Change instruments using the buttons below.</p>
+        </div>
+
+        <div id="transcribe-overlay" class="hidden">
+            <div class="transcribe-card">
+                <h3 id="transcribe-title">Listening to your song…</h3>
+                <div class="transcribe-bar"><div id="transcribe-fill"></div></div>
+                <p id="transcribe-status">Transcribing — this can take a moment.</p>
             </div>
         </div>
     </div>
-    
+
     <canvas id="sequencer"></canvas>
+
+    <div id="clip-crop-modal" class="hidden">
+        <div class="modal-content clip-crop-content">
+            <h3>Trim to a loop</h3>
+            <p class="clip-crop-hint">Stem separation runs faster on a short clip. Drag the selection to move it, or drag its edges to resize — then learn just that loop, or use the whole song.</p>
+            <canvas id="clip-crop-wave" title="Drag to move · drag the edges to resize"></canvas>
+            <div class="clip-crop-controls">
+                <label>Start (s) <input type="number" id="clip-crop-start" min="0" step="0.1" value="0"></label>
+                <label>Length (s) <input type="number" id="clip-crop-length" min="1" step="0.5" value="10"></label>
+                <span id="clip-crop-readout"></span>
+            </div>
+            <div class="clip-crop-actions">
+                <button id="clip-crop-whole" class="secondary-btn">Use whole song</button>
+                <button id="clip-crop-cancel" class="secondary-btn">Cancel</button>
+                <button id="clip-crop-confirm" class="primary-btn">Learn this loop</button>
+            </div>
+        </div>
+    </div>
     
     <div id="add-track-modal" class="hidden">
         <div class="modal-content">
@@ -144,6 +241,30 @@
         </div>
     </div>
     
+    <div id="presets-modal" class="hidden">
+        <div class="modal-content presets-content">
+            <h3>Presets &amp; Starting Points</h3>
+            <p class="presets-sub">Click a beat or chord progression to drop it onto a track. It fills the loop and every note stays editable afterwards.</p>
+
+            <h4 class="presets-group-title">
+                <svg viewBox="0 0 24 24" width="17" height="17" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="7" rx="8" ry="3"></ellipse><path d="M4 7v6c0 1.66 3.58 3 8 3s8-1.34 8-3V7"></path><line x1="16" y1="10" x2="20" y2="4"></line></svg>
+                Drum Beats
+            </h4>
+            <div id="drum-preset-list" class="preset-grid"></div>
+
+            <h4 class="presets-group-title">
+                <svg viewBox="0 0 24 24" width="17" height="17" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"></rect><line x1="8" y1="5" x2="8" y2="14"></line><line x1="12" y1="5" x2="12" y2="14"></line><line x1="16" y1="5" x2="16" y2="14"></line></svg>
+                Chord Progressions
+            </h4>
+            <p id="preset-key-hint" class="preset-key-hint"></p>
+            <div id="chord-preset-list" class="preset-grid"></div>
+
+            <button id="close-presets-btn" class="nav-icon" style="position: absolute; top: 1rem; right: 1rem;">
+                <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+            </button>
+        </div>
+    </div>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

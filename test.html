@@ -1,0 +1,9 @@
+<!DOCTYPE html>
+<html>
+<body>
+<script>
+window.addEventListener('mousemove', e => console.log(e.clientX, e.clientY));
+window.dispatchEvent(new MouseEvent('mousemove', {clientX: 42, clientY: 100}));
+</script>
+</body>
+</html>

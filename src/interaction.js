@@ -1,10 +1,21 @@
-import { state, generateId, getActiveTrack } from './state.js';
+import { state, generateId, getActiveTrack, undoNote, redoNote, clearRedo } from './state.js';
 import * as Tone from 'tone';
 import { getTrackScale, playSound, syncAudioPart, LOOP_LENGTH_SECONDS, instrumentsStart, instrumentsStop } from './audio.js';
-import { noteToY, yToNote, getTrackLayout } from './pitchMap.js';
+import { noteToY, yToNote, getTrackLayout, snapMidiToScale, TRACK_MIDI_RANGE, MIN_PITCH_RANGE, MAX_PITCH_RANGE } from './pitchMap.js';
+import { RULER_HEIGHT, visibleDur, xToTime, timeToX, clampScrollX, MAX_ZOOM_X } from './renderer.js';
 
 const keys = ['a', 's', 'd', 'f', 'g'];
 const activePresses = {};
+
+// When Scale Lock is on and a song's key is known, snap a note name to the
+// nearest in-key pitch so handcrafted notes stay in tune. Returns the note
+// unchanged otherwise (chromatic placement).
+function applyScaleLock(noteName) {
+    if (!state.scaleLock || !state.song.key) return noteName;
+    const midi = Tone.Frequency(noteName).toMidi();
+    const snapped = snapMidiToScale(midi, state.song.key.scalePitchClasses);
+    return Tone.Frequency(snapped, 'midi').toNote();
+}
 
 export function initInteraction(canvasEl) {
     window.addEventListener('keydown', (e) => {
@@ -41,6 +52,7 @@ export function initInteraction(canvasEl) {
                 playSound(activeTrack.id, noteVal, undefined, "32n");
                 
                 // For drums, duration is fixed, save directly
+                clearRedo();
                 state.notes.push({
                     id: generateId(),
                     trackId: activeTrack.id,
@@ -63,9 +75,14 @@ export function initInteraction(canvasEl) {
             }
         }
         
+        // Redo (Ctrl+Shift+Z / Cmd+Shift+Z, or Ctrl+Y)
+        if (((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z') ||
+            ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y')) {
+            redoNote();
+            syncAudioPart(state.notes);
         // Undo (Ctrl+Z or Cmd+Z)
-        if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-            state.notes.pop();
+        } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+            undoNote();
             syncAudioPart(state.notes);
         }
     });
@@ -88,7 +105,8 @@ export function initInteraction(canvasEl) {
                 let duration = qEndTime - press.time;
                 
                 if (duration <= 0) duration = Tone.Time("32n").toSeconds();
-                
+
+                clearRedo();
                 state.notes.push({
                     id: generateId(),
                     trackId: activeTrack.id,
@@ -119,7 +137,16 @@ export function initInteraction(canvasEl) {
     let autoScrollRAF = null;
     let currentMouseX = 0;
     let currentMouseY = 0;
-    
+
+    // Move the playhead (Transport position) to a canvas X. Works whether the
+    // Transport is running or paused; the render loop reads Transport.seconds.
+    function scrubTo(x) {
+        const loopDur = LOOP_LENGTH_SECONDS();
+        let t = xToTime(x);
+        t = Math.max(0, Math.min(loopDur - 0.001, t));
+        Tone.Transport.seconds = t;
+    }
+
     function doAutoScroll() {
         if (!dragMode || !dragNote || autoScrollDir === 0 || !autoScrollTrackLayout) {
             autoScrollRAF = null;
@@ -128,13 +155,16 @@ export function initInteraction(canvasEl) {
         
         const trLayout = autoScrollTrackLayout;
         let scrolled = false;
-        if (autoScrollDir === -1 && trLayout.track.baseMidi < 84) {
-            trLayout.track.baseMidi += 1;
-            dragStartY += (trLayout.height / 24);
+        const currentBaseMidi = trLayout.track.baseMidi || 48;
+        // One semitone of scroll = one lane tall, which depends on the track's zoom.
+        const laneHeight = trLayout.height / (Math.round(trLayout.track.pitchRange || TRACK_MIDI_RANGE));
+        if (autoScrollDir === -1 && currentBaseMidi < 84) {
+            trLayout.track.baseMidi = currentBaseMidi + 1;
+            dragStartY += laneHeight;
             scrolled = true;
-        } else if (autoScrollDir === 1 && trLayout.track.baseMidi > 12) {
-            trLayout.track.baseMidi -= 1;
-            dragStartY -= (trLayout.height / 24);
+        } else if (autoScrollDir === 1 && currentBaseMidi > 12) {
+            trLayout.track.baseMidi = currentBaseMidi - 1;
+            dragStartY -= laneHeight;
             scrolled = true;
         }
         
@@ -159,34 +189,54 @@ export function initInteraction(canvasEl) {
     // Prevent context menu to allow right-click erasing
     canvasEl.addEventListener('contextmenu', e => e.preventDefault());
     
-    // Wheel event for scrolling
+    // Wheel event for scrolling + horizontal (time) zoom.
     canvasEl.addEventListener('wheel', (e) => {
         e.preventDefault();
-        
+        if (!state.camera) state.camera = { scrollY: 0, zoomY: 1.0, zoomX: 1.0, scrollX: 0 };
+
         const rect = canvasEl.getBoundingClientRect();
         const currentY = e.clientY - rect.top;
-        const scrollY = state.camera ? state.camera.scrollY : 0;
+        const cursorX = e.clientX - rect.left;
+
+        // Ctrl/Cmd + wheel = zoom the TIMELINE in/out, anchored on the note under
+        // the cursor (so you zoom into what you're looking at). This magnifies time
+        // — notes spread apart so they're easy to grab — without changing how tall
+        // they are.
+        if (e.ctrlKey || e.metaKey) {
+            const timeAtCursor = xToTime(cursorX);
+            const factor = e.deltaY < 0 ? 1.2 : 1 / 1.2; // wheel up = zoom in
+            state.camera.zoomX = Math.max(1, Math.min(MAX_ZOOM_X, (state.camera.zoomX || 1) * factor));
+            // Keep timeAtCursor pinned under the cursor after the zoom change.
+            state.camera.scrollX = timeAtCursor - (cursorX / canvasEl.width) * visibleDur();
+            clampScrollX();
+            return;
+        }
+
+        // Shift + wheel = pan the timeline left/right when zoomed in.
+        if (e.shiftKey) {
+            state.camera.scrollX = (state.camera.scrollX || 0) + Math.sign(e.deltaY) * visibleDur() * 0.15;
+            clampScrollX();
+            return;
+        }
+
+        const scrollY = state.camera.scrollY || 0;
         const layout = getTrackLayout(state.tracks, scrollY);
-        
         const hoveredLayout = layout.find(l => currentY >= l.top && currentY <= l.bottom);
         if (hoveredLayout && hoveredLayout.track.expanded) {
+            const track = hoveredLayout.track;
             let minLimit = 12; // C0
             let maxLimit = 84; // C6
-            
-            if (hoveredLayout.track.type === 'drums') {
+            if (track.type === 'drums') {
                 minLimit = 36;
                 maxLimit = 36; // Lock drum scrolling
             }
-            
             const delta = Math.sign(e.deltaY);
-            hoveredLayout.track.baseMidi = Math.max(minLimit, Math.min(maxLimit, Math.round((hoveredLayout.track.baseMidi || 48)) + delta));
+            track.baseMidi = Math.max(minLimit, Math.min(maxLimit, Math.round((track.baseMidi || 48)) + delta));
             return;
         }
-        
-        // Otherwise scroll arrangement
-        if (!state.camera) state.camera = { scrollY: 0, zoomY: 1.0 };
+
+        // Otherwise scroll the arrangement vertically.
         state.camera.scrollY -= e.deltaY;
-        
         const baseLayout = getTrackLayout(state.tracks, 0);
         const totalHeight = baseLayout.length > 0 ? baseLayout[baseLayout.length - 1].bottom : 0;
         const maxScroll = Math.max(0, totalHeight - canvasEl.height);
@@ -195,14 +245,31 @@ export function initInteraction(canvasEl) {
 
     canvasEl.addEventListener('mousedown', (e) => {
         if (!state.isPlaying) return;
-        
-        const activeTrack = getActiveTrack();
-        if (!activeTrack) return;
-        
+
+        if (e.button === 1) e.preventDefault();
+
         const rect = canvasEl.getBoundingClientRect();
         const clickX = e.clientX - rect.left;
         const clickY = e.clientY - rect.top;
-        
+
+        // Middle button to pan the view
+        if (e.button === 1) {
+            dragMode = 'pan';
+            dragStartX = clickX;
+            dragOffsets = { startScrollX: state.camera.scrollX || 0 };
+            return;
+        }
+
+        // Grab the playhead from the top timeline ruler (left button only).
+        if (e.button === 0 && clickY <= RULER_HEIGHT) {
+            dragMode = 'scrub';
+            scrubTo(clickX);
+            return;
+        }
+
+        const activeTrack = getActiveTrack();
+        if (!activeTrack) return;
+
         const loopDur = LOOP_LENGTH_SECONDS();
         const scrollY = state.camera ? state.camera.scrollY : 0;
         const layout = getTrackLayout(state.tracks, scrollY);
@@ -214,9 +281,9 @@ export function initInteraction(canvasEl) {
             const { track, top: trackTop, height: trackHeight } = trackLayout;
             
             const noteSecs = Tone.Time(n.time).toSeconds() % loopDur;
-            const noteX = (noteSecs / loopDur) * canvasEl.width;
+            const noteX = timeToX(noteSecs);
             const durSecs = Tone.Time(n.duration).toSeconds();
-            const noteWidth = (durSecs / loopDur) * canvasEl.width;
+            const noteWidth = timeToX(durSecs) - timeToX(0);
             
             const noteY = noteToY(n, trackTop, trackHeight, track);
             
@@ -341,8 +408,7 @@ export function initInteraction(canvasEl) {
             dragStartX = clickX;
             dragStartY = clickY;
             
-            const progress = clickX / canvasEl.width;
-            const noteSecs = progress * loopDur;
+            const noteSecs = xToTime(clickX);
             const qTime = Tone.Time(noteSecs).quantize("32n");
             
             let noteVal;
@@ -355,6 +421,8 @@ export function initInteraction(canvasEl) {
                     if (midi >= 40) noteVal = 'F#2'; // Hat
                     else if (midi >= 37) noteVal = 'D2'; // Snare
                     else noteVal = 'C2'; // Kick
+                } else {
+                    noteVal = applyScaleLock(noteVal);
                 }
             } else {
                 const yWithinTrack = clickY - trackTop;
@@ -375,7 +443,8 @@ export function initInteraction(canvasEl) {
                 duration: "32n"
             };
             if (scaleIndex !== null) dragNote.scaleIndex = scaleIndex;
-            
+
+            clearRedo();
             state.notes.push(dragNote);
             syncAudioPart(state.notes);
             
@@ -386,9 +455,31 @@ export function initInteraction(canvasEl) {
     window.addEventListener('mousemove', (e) => {
         currentMouseX = e.clientX;
         currentMouseY = e.clientY;
-        
-        if (!dragMode) return;
-        
+
+        if (!dragMode) {
+            // Hint that the top ruler strip is the playhead scrub zone.
+            const rect = canvasEl.getBoundingClientRect();
+            const overRuler = (e.clientY - rect.top) <= RULER_HEIGHT &&
+                e.clientX >= rect.left && e.clientX <= rect.right;
+            canvasEl.style.cursor = overRuler ? 'ew-resize' : '';
+            return;
+        }
+
+        if (dragMode === 'scrub') {
+            const rect = canvasEl.getBoundingClientRect();
+            scrubTo(e.clientX - rect.left);
+            return;
+        }
+
+        if (dragMode === 'pan') {
+            const rect = canvasEl.getBoundingClientRect();
+            const currentX = e.clientX - rect.left;
+            const diffX = currentX - dragStartX;
+            state.camera.scrollX = dragOffsets.startScrollX - (diffX / canvasEl.width) * visibleDur();
+            clampScrollX();
+            return;
+        }
+
         const activeTrack = getActiveTrack();
         if (!activeTrack) return;
         
@@ -418,7 +509,7 @@ export function initInteraction(canvasEl) {
                 if (!trackLayout) return;
                 
                 const noteSecs = Tone.Time(note.time).toSeconds() % loopDur;
-                const noteX = (noteSecs / loopDur) * canvasEl.width;
+                const noteX = timeToX(noteSecs);
                 const noteY = noteToY(note, trackLayout.top, trackLayout.height, trackLayout.track);
                 
                 if (noteX >= box.x && noteX <= box.x + box.w &&
@@ -432,7 +523,7 @@ export function initInteraction(canvasEl) {
         if (dragMode === 'create' && activeTrack.type !== 'drums') {
             // Drag to draw length
             const diffX = Math.max(0, currentX - dragStartX);
-            const diffSecs = (diffX / canvasEl.width) * loopDur;
+            const diffSecs = xToTime(currentX) - xToTime(dragStartX);
             
             const minDur = Tone.Time("32n").toSeconds();
             let newDurSecs = Math.max(minDur, diffSecs);
@@ -441,7 +532,7 @@ export function initInteraction(canvasEl) {
             dragNote.duration = qDur;
             
         } else if (dragMode === 'move' || dragMode === 'move-selection') {
-            const diffXSecs = ((currentX - dragStartX) / canvasEl.width) * loopDur;
+            const diffXSecs = xToTime(currentX) - xToTime(dragStartX);
             
             // Auto-scroll track internal pitch if dragging near edge
             if (dragNote) {
@@ -492,6 +583,8 @@ export function initInteraction(canvasEl) {
                             if (midi >= 40) newNoteVal = 'F#2';
                             else if (midi >= 37) newNoteVal = 'D2';
                             else newNoteVal = 'C2';
+                        } else {
+                            newNoteVal = applyScaleLock(newNoteVal);
                         }
                         item.note.scaleIndex = undefined;
                     } else {
@@ -516,7 +609,7 @@ export function initInteraction(canvasEl) {
     
     window.addEventListener('mouseup', (e) => {
         if (dragMode) {
-            if (dragMode !== 'select-box') {
+            if (dragMode !== 'select-box' && dragMode !== 'scrub') {
                 syncAudioPart(state.notes);
             }
             state.selectionBox = null;

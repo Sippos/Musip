@@ -63,21 +63,31 @@ export function initExport(canvasEl) {
                 stopRecordingResolver = resolve;
             });
             
-            // Stop recording
-            const recording = await masterRecorder.stop();
+            // Stop recording with timeout to prevent hanging
+            const recordingPromise = masterRecorder.stop();
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error("Recording stop timed out. Your browser might not support this feature or no audio was flowing.")), 3000);
+            });
+            
+            const recording = await Promise.race([recordingPromise, timeoutPromise]);
             stopRecordingResolver = null;
             
-            // Create a download link for the webm file
+            // Check browser support for extension
+            const ext = MediaRecorder.isTypeSupported("audio/webm") ? "webm" : "wav";
+            
+            // Create a download link
             const url = URL.createObjectURL(recording);
             const anchor = document.createElement('a');
-            anchor.download = 'musip-tape.webm';
+            anchor.download = `musip-tape.${ext}`;
             anchor.href = url;
+            document.body.appendChild(anchor); // Some browsers require it to be in the DOM
             anchor.click();
-            URL.revokeObjectURL(url);
+            document.body.removeChild(anchor);
+            setTimeout(() => URL.revokeObjectURL(url), 100);
             
         } catch (err) {
             console.error('Failed to record audio', err);
-            alert('Recording failed. Make sure audio is playing.');
+            alert('Recording failed: ' + err.message);
         } finally {
             btn.textContent = originalText;
             btn.style.backgroundColor = originalBg;
