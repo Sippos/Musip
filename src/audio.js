@@ -186,7 +186,8 @@ export function setTrackStem(trackId, audioBuffer) {
     trackStemPlayers[trackId] = player;
     applyStemLoop(trackId);
     
-    const chopPlayer = new Tone.Player(audioBuffer).connect(pitchShift);
+    // Chop players use vinyl-style pitch (playbackRate), so bypass PitchShift
+    const chopPlayer = new Tone.Player(audioBuffer).connect(bitcrusher);
     trackChopPlayers[trackId] = chopPlayer;
     
     // Apply macros to stem immediately
@@ -525,7 +526,9 @@ export function playSound(trackId, noteKey, time = Tone.now(), duration = "8n") 
         const playbackRate = track.samplePlaybackRate || 1.0;
         const scaledDuration = Tone.Time(duration).toSeconds() * playbackRate;
         
-        player.restart(time, offset, scaledDuration);
+        // Stop the player first to enforce choking, then start it
+        player.stop(time);
+        player.start(time, offset, scaledDuration);
         return;
     }
 
@@ -572,7 +575,9 @@ export function instrumentsStart(trackId, noteVal) {
             offset = sliceIndex * sliceLength;
         }
         
-        player.restart(Tone.now(), offset);
+        // Stop the player first to enforce choking
+        player.stop(Tone.now());
+        player.start(Tone.now(), offset);
         return;
     }
 
