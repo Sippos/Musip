@@ -6,7 +6,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "vite",
-    "dev:all": "concurrently -n vite,stems -c cyan,magenta \"vite\" \"cd server && uvicorn app:app --port 8000\"",
+    "dev:all": "concurrently -n vite,stems -c cyan,magenta \"vite\" \"cd server && .venv/bin/uvicorn app:app --port 8000\"",
     "build": "vite build"
   },
   "dependencies": {

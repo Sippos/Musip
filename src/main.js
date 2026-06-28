@@ -950,10 +950,20 @@ function drawChopWave(track, buffer) {
         }
     }
 
-    // Draw simple waveform representation (using computePeaks if we want, but for now we can just draw lines or we can use the computePeaks imported from cropClip.js)
+    // Draw simple waveform representation
+    const peaks = computePeaks(buffer, width); // Compute peaks for the canvas width
+    
     ctx.fillStyle = track.color;
     ctx.globalAlpha = 0.5;
-    ctx.fillRect(0, height / 4, width, height / 2); // placeholder for actual peaks
+    
+    const centerY = height / 2;
+    for (let x = 0; x < width; x++) {
+        // Peaks might have fewer items than width if width > 800, but computePeaks uses bucketCount=800 by default. Let's just scale it.
+        const peakIdx = Math.floor((x / width) * peaks.length);
+        const peak = peaks[peakIdx] || 0;
+        const amp = peak * (height / 2);
+        ctx.fillRect(x, centerY - amp, 1, amp * 2);
+    }
     
     // Actually let's just draw the slices
     ctx.globalAlpha = 1.0;
