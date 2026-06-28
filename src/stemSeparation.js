@@ -78,16 +78,16 @@ export async function separateStems(file, onProgress) {
     const jobId = await startJob(file);
     const stemUrls = await pollJob(jobId, onProgress);
 
+    // Use a single, persistent AudioContext to decode audio data.
+    // If we close the context, the decoded AudioBuffers may have their memory freed
+    // resulting in silent playback and empty waveforms!
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    try {
-        const stems = {};
-        for (const name of STEM_NAMES) {
-            if (stemUrls[name]) stems[name] = await fetchAndDecode(stemUrls[name], audioCtx);
-        }
-        // Reuse the dropped file (not a stem) as the full-quality reference.
-        const original = await audioCtx.decodeAudioData(await file.arrayBuffer());
-        return { stems, original };
-    } finally {
-        audioCtx.close();
+    
+    const stems = {};
+    for (const name of STEM_NAMES) {
+        if (stemUrls[name]) stems[name] = await fetchAndDecode(stemUrls[name], audioCtx);
     }
+    // Reuse the dropped file (not a stem) as the full-quality reference.
+    const original = await audioCtx.decodeAudioData(await file.arrayBuffer());
+    return { stems, original };
 }

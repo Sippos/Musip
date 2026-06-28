@@ -525,9 +525,6 @@ export function playSound(trackId, noteKey, time = Tone.now(), duration = "8n") 
         const playbackRate = track.samplePlaybackRate || 1.0;
         const scaledDuration = Tone.Time(duration).toSeconds() * playbackRate;
         
-        // Stop currently playing chop to ensure monophonic choking
-        player.stop(time);
-        
         player.restart(time, offset, scaledDuration);
         return;
     }
@@ -574,9 +571,6 @@ export function instrumentsStart(trackId, noteVal) {
             const sliceLength = player.buffer.duration / 16;
             offset = sliceIndex * sliceLength;
         }
-        
-        // Stop currently playing chop
-        player.stop(Tone.now());
         
         player.restart(Tone.now(), offset);
         return;

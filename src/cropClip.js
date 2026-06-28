@@ -8,11 +8,7 @@
 
 export async function decodeAudioFile(file) {
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    try {
-        return await audioCtx.decodeAudioData(await file.arrayBuffer());
-    } finally {
-        audioCtx.close();
-    }
+    return await audioCtx.decodeAudioData(await file.arrayBuffer());
 }
 
 // Reduce an AudioBuffer to `bucketCount` absolute-peak buckets for a cheap
