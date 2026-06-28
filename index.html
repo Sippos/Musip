@@ -31,6 +31,13 @@
                         <button id="bpm-up" class="readout-step" title="Faster" tabindex="-1">+</button>
                     </div>
                     <span class="readout-sep">·</span>
+                    <div class="readout-field bars-field">
+                        <button id="bars-down" class="readout-step" title="Shorter Loop" tabindex="-1">−</button>
+                        <span id="bars-display" class="readout-input" style="width: auto; padding: 0 4px; font-variant-numeric: tabular-nums;">4</span>
+                        <span class="readout-unit">Bars</span>
+                        <button id="bars-up" class="readout-step" title="Longer Loop" tabindex="-1">+</button>
+                    </div>
+                    <span class="readout-sep">·</span>
                     <select id="key-select" class="readout-input key-select" title="Song key — notes snap to this scale when Scale Snap is on, and in-key rows are highlighted."></select>
                 </div>
                 <div class="nav-divider"></div>
@@ -195,8 +202,20 @@
             <!-- Chop controls -->
             <div id="chop-controls" class="hidden">
                 <div class="tweak-section">
-                    <canvas id="chop-wave-canvas" width="250" height="80" style="background: rgba(0,0,0,0.03); border-radius: 0.5rem; margin-bottom: 0.5rem; width: 100%; display: block; cursor: crosshair;" title="Click and drag markers to adjust chops"></canvas>
-                    <p style="font-size: 0.85rem; color: rgba(0,0,0,0.6); margin-bottom: 0.5rem; text-align: center;">16 Pads · Drag slice markers to adjust</p>
+                    <div style="display: flex; gap: 1rem; margin-bottom: 0.5rem; justify-content: center; align-items: center;">
+                        <label style="font-size: 0.85rem; font-weight: 600;">Chop Mode:</label>
+                        <select id="chop-mode-select" style="padding: 0.3rem; border-radius: 0.3rem;">
+                            <option value="equal">Equal</option>
+                            <option value="transient">Transient</option>
+                            <option value="manual">Manual</option>
+                        </select>
+                        <div id="chop-transient-controls" style="display: none; gap: 0.5rem; align-items: center;">
+                            <label style="font-size: 0.8rem;">Threshold:</label>
+                            <input type="range" id="chop-threshold" min="0.0" max="1.0" step="0.01" value="0.1">
+                        </div>
+                    </div>
+                    <canvas id="chop-wave-canvas" width="1000" height="200" style="background: rgba(0,0,0,0.03); border-radius: 0.5rem; margin-bottom: 0.5rem; width: 100%; display: block; cursor: crosshair;" title="Click and drag markers to adjust chops"></canvas>
+                    <p style="font-size: 0.85rem; color: rgba(0,0,0,0.6); margin-bottom: 0.5rem; text-align: center;">Drag slice markers to adjust bounds</p>
                 </div>
                 <div class="tweak-section macro-grid">
                     <div class="slider-row" style="grid-column: span 2;">

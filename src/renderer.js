@@ -18,16 +18,16 @@ export const MAX_ZOOM_X = 40;
 
 // How many seconds of the loop are visible given the current horizontal zoom.
 export function visibleDur() {
-    const loopDur = LOOP_LENGTH_SECONDS();
+    // Decouple from sample length: base scale is 4 bars at current tempo.
+    const baseDur = Tone.Time("4m").toSeconds();
     const zoomX = (state.camera && state.camera.zoomX) || 1;
-    return loopDur / zoomX;
+    return baseDur / zoomX;
 }
 
-// Clamp the horizontal scroll so the view stays within [0, loopDur].
+// Clamp the horizontal scroll so the view doesn't go left of 0. Infinite to the right.
 export function clampScrollX() {
     if (!state.camera) return;
-    const maxScroll = Math.max(0, LOOP_LENGTH_SECONDS() - visibleDur());
-    state.camera.scrollX = Math.max(0, Math.min(maxScroll, state.camera.scrollX || 0));
+    state.camera.scrollX = Math.max(0, state.camera.scrollX || 0);
 }
 
 // Time (seconds) -> canvas x, honouring horizontal zoom + scroll. The single
@@ -237,14 +237,34 @@ function render(time) {
     // beats) are drawn stronger than beats.
     const secondsPerBeat = 60 / Tone.Transport.bpm.value;
     if (secondsPerBeat > 0 && isFinite(secondsPerBeat)) {
-        for (let beat = 0, t = 0; t < loopDur; beat++, t += secondsPerBeat) {
+        const visibleStart = Math.max(0, xToTime(0));
+        let beat = Math.floor(visibleStart / secondsPerBeat);
+        let t = beat * secondsPerBeat;
+        const visibleEnd = xToTime(canvas.width);
+        const drawEnd = Math.max(loopDur, visibleEnd);
+        
+        for (; t < drawEnd; beat++, t += secondsPerBeat) {
             const x = Math.round(timeToX(t)) + 0.5;
             if (x < 0 || x > canvas.width) continue; // off-screen when zoomed in
             ctx.strokeStyle = beat % 4 === 0 ? 'rgba(0,0,0,0.12)' : 'rgba(0,0,0,0.04)';
-            ctx.lineWidth = 1;
+            ctx.lineWidth = beat % 4 === 0 ? 2 : 1;
             ctx.beginPath();
-            ctx.moveTo(x, RULER_HEIGHT);
+            ctx.moveTo(x, 0);
             ctx.lineTo(x, canvas.height);
+            ctx.stroke();
+        }
+
+        // Draw loop boundary shading if loop is shorter than visible area
+        const loopX = timeToX(loopDur);
+        if (loopX < canvas.width) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
+            ctx.fillRect(loopX, 0, canvas.width - loopX, canvas.height);
+            
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(loopX, 0);
+            ctx.lineTo(loopX, canvas.height);
             ctx.stroke();
         }
     }
@@ -269,11 +289,32 @@ function render(time) {
             ctx.globalAlpha = isActive ? 1.0 : 0.5; // Inactive tracks are more visible now since they don't overlap
         }
         
-        const noteSecs = Tone.Time(note.time).toSeconds() % loopDur;
+        // Do not wrap notes visually. They should appear at their absolute time.
+        // If they are outside the loop, the loop boundary shading will make that clear.
+        const noteSecs = Tone.Time(note.time).toSeconds();
         const noteX = timeToX(noteSecs);
 
         const noteY = noteToY(note, trackTop, trackHeight, track);
-        const noteDur = Tone.Time(note.duration).toSeconds();
+        let noteDur;
+        try {
+            noteDur = Tone.Time(note.duration).toSeconds();
+            if (track.engine === 'chop') {
+                const midi = Tone.Frequency(note.note).toMidi();
+                const baseMidi = track.baseMidi || 48;
+                const sliceIndex = Math.max(0, Math.min(15, midi - baseMidi));
+                if (track.slices && track.slices.length > sliceIndex) {
+                    const slice = track.slices[sliceIndex];
+                    const playbackRate = track.samplePlaybackRate || 1.0;
+                    noteDur = (slice.endTime - slice.startTime) / playbackRate;
+                } else {
+                    noteDur = Tone.Time("32n").toSeconds();
+                }
+            }
+        } catch (err) {
+            ctx.fillStyle = 'red';
+            ctx.fillText(err.message, timeToX(noteSecs), noteY);
+            return;
+        }
         const noteWidth = timeToX(noteSecs + noteDur) - noteX;
 
         // Skip notes scrolled off the (horizontally zoomed) view.
@@ -289,16 +330,44 @@ function render(time) {
             noteHeight = laneHeight * 0.8;
         }
 
+        const halfHeight = noteHeight / 2;
+        const currentAlpha = ctx.globalAlpha;
+        const isSelected = state.selectedNoteIds && state.selectedNoteIds.includes(note.id);
+        ctx.fillStyle = isSelected ? '#fff' : track.color;
         ctx.beginPath();
-        if (ctx.roundRect) {
-            ctx.roundRect(noteX, noteY - noteHeight/2, Math.max(8, noteWidth), noteHeight, 8);
+        
+        if (track.engine === 'chop') {
+            const trigDur = Tone.Time("32n").toSeconds();
+            const trigWidth = timeToX(noteSecs + trigDur) - noteX;
+            if (ctx.roundRect) {
+                ctx.roundRect(noteX, noteY - halfHeight, Math.max(2, trigWidth), noteHeight, 2);
+            } else {
+                ctx.rect(noteX, noteY - halfHeight, Math.max(2, trigWidth), noteHeight);
+            }
+            ctx.fill();
+            
+            if (noteWidth > trigWidth) {
+                ctx.beginPath();
+                ctx.globalAlpha = currentAlpha * 0.4;
+                if (ctx.roundRect) {
+                    ctx.roundRect(noteX + trigWidth, noteY - halfHeight, noteWidth - trigWidth, noteHeight, 2);
+                } else {
+                    ctx.rect(noteX + trigWidth, noteY - halfHeight, noteWidth - trigWidth, noteHeight);
+                }
+                ctx.fill();
+                ctx.globalAlpha = currentAlpha;
+            }
         } else {
-            ctx.rect(noteX, noteY - noteHeight/2, Math.max(8, noteWidth), noteHeight);
+            if (ctx.roundRect) {
+                ctx.roundRect(noteX, noteY - halfHeight, Math.max(2, noteWidth), noteHeight, 2);
+            } else {
+                ctx.rect(noteX, noteY - halfHeight, Math.max(2, noteWidth), noteHeight);
+            }
+            ctx.fill();
         }
-        ctx.fill();
         
         // Highlight selected notes
-        if (state.selectedNoteIds && state.selectedNoteIds.includes(note.id)) {
+        if (isSelected) {
             ctx.strokeStyle = '#ffffff';
             ctx.lineWidth = 2;
             ctx.stroke();

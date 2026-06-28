@@ -514,21 +514,24 @@ export function playSound(trackId, noteKey, time = Tone.now(), duration = "8n") 
         const baseMidi = track.baseMidi || 48;
         const sliceIndex = Math.max(0, Math.min(15, midi - baseMidi));
         
-        let offset;
-        if (track.sliceOffsets && track.sliceOffsets.length > sliceIndex) {
-            offset = track.sliceOffsets[sliceIndex];
+        let offset, maxDur;
+        if (track.slices && track.slices.length > sliceIndex) {
+            const slice = track.slices[sliceIndex];
+            offset = slice.startTime;
+            maxDur = slice.endTime - slice.startTime;
         } else {
             const sliceLength = player.buffer.duration / 16;
             offset = sliceIndex * sliceLength;
+            maxDur = sliceLength;
         }
         
-        // Use the original duration scaled by playbackRate
         const playbackRate = track.samplePlaybackRate || 1.0;
-        const scaledDuration = Tone.Time(duration).toSeconds() * playbackRate;
+        const maxPlayTime = maxDur / playbackRate;
+        const finalDuration = maxPlayTime; // Play the full slice, choked by the next note
         
         // Stop the player first to enforce choking, then start it
         player.stop(time);
-        player.start(time, offset, scaledDuration);
+        player.start(time, offset, finalDuration);
         return;
     }
 
@@ -567,17 +570,23 @@ export function instrumentsStart(trackId, noteVal) {
         const baseMidi = track.baseMidi || 48;
         const sliceIndex = Math.max(0, Math.min(15, midi - baseMidi));
         
-        let offset;
-        if (track.sliceOffsets && track.sliceOffsets.length > sliceIndex) {
-            offset = track.sliceOffsets[sliceIndex];
+        let offset, maxDur;
+        if (track.slices && track.slices.length > sliceIndex) {
+            const slice = track.slices[sliceIndex];
+            offset = slice.startTime;
+            maxDur = slice.endTime - slice.startTime;
         } else {
             const sliceLength = player.buffer.duration / 16;
             offset = sliceIndex * sliceLength;
+            maxDur = sliceLength;
         }
+        
+        const playbackRate = track.samplePlaybackRate || 1.0;
+        const maxPlayTime = maxDur / playbackRate;
         
         // Stop the player first to enforce choking
         player.stop(Tone.now());
-        player.start(Tone.now(), offset);
+        player.start(Tone.now(), offset, maxPlayTime);
         return;
     }
 

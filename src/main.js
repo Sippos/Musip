@@ -592,6 +592,10 @@ function updateSongReadout() {
     if (keySelect && state.song.key) {
         keySelect.value = `${state.song.key.tonic}:${state.song.key.mode}`;
     }
+    const barsDisplay = document.getElementById('bars-display');
+    if (barsDisplay) {
+        import('./audio.js').then(m => barsDisplay.textContent = m.LOOP_LENGTH_MEASURES);
+    }
 }
 
 function initSongControls() {
@@ -630,6 +634,22 @@ function initSongControls() {
         document.getElementById('bpm-down')?.addEventListener('click', () =>
             applyBpm((parseFloat(bpmInput.value) || 90) - 1));
     }
+
+    const applyBars = (value) => {
+        const bars = Math.round(Math.min(32, Math.max(1, value)));
+        if (!isFinite(bars)) return;
+        import('./audio.js').then(module => {
+            module.setLoopLengthMeasures(bars);
+            updateSongReadout();
+            if (window.redrawReferenceWave) window.redrawReferenceWave();
+        });
+    };
+    document.getElementById('bars-up')?.addEventListener('click', () => {
+        import('./audio.js').then(m => applyBars(m.LOOP_LENGTH_MEASURES + 1));
+    });
+    document.getElementById('bars-down')?.addEventListener('click', () => {
+        import('./audio.js').then(m => applyBars(m.LOOP_LENGTH_MEASURES - 1));
+    });
 
     updateSongReadout();
 }
@@ -869,6 +889,7 @@ function updateTweakUI() {
     drumControls.classList.toggle('hidden', !isDrums || isChop);
     const chopControls = document.getElementById('chop-controls');
     if (chopControls) chopControls.classList.toggle('hidden', !isChop);
+    tweakPanel.classList.toggle('tweak-panel-expanded', isChop);
 
     import('./audio.js').then(module => {
         const hasStem = module.hasTrackStem(state.activeTrackId);
@@ -923,14 +944,60 @@ function updateTweakUI() {
         
         if (isChop) {
             const speedSlider = document.getElementById('chop-speed');
-            if (speedSlider) {
-                // we will map this to the activeTrack state
-                speedSlider.value = activeTrack.samplePlaybackRate || 1.0;
-            }
+            if (speedSlider) speedSlider.value = activeTrack.samplePlaybackRate || 1.0;
+            
+            const chopModeSelect = document.getElementById('chop-mode-select');
+            const transientControls = document.getElementById('chop-transient-controls');
+            const thresholdInput = document.getElementById('chop-threshold');
+            if (chopModeSelect) chopModeSelect.value = activeTrack.chopMode || 'equal';
+            if (transientControls) transientControls.style.display = activeTrack.chopMode === 'transient' ? 'flex' : 'none';
+            if (thresholdInput) thresholdInput.value = activeTrack.chopThreshold || 0.1;
+            
             drawChopWave(activeTrack, module.getChopBuffer(state.activeTrackId));
         }
 
     });
+}
+
+function initTrackSlices(track, buffer) {
+    if (!track.chopMode) track.chopMode = 'equal';
+    if (!track.slices || track.slices.length === 0) {
+        track.slices = [];
+        if (track.chopMode === 'equal') {
+            const sliceLength = buffer.duration / 16;
+            for (let i = 0; i < 16; i++) {
+                track.slices.push({ id: i, startTime: i * sliceLength, endTime: (i + 1) * sliceLength });
+            }
+        } else if (track.chopMode === 'transient') {
+            const threshold = track.chopThreshold || 0.1;
+            const peaks = computePeaks(buffer, 800);
+            let slicePoints = [0];
+            let inPeak = false;
+            for (let i = 0; i < peaks.length; i++) {
+                if (peaks[i] > threshold) {
+                    if (!inPeak) {
+                        const time = (i / peaks.length) * buffer.duration;
+                        if (time - slicePoints[slicePoints.length-1] > 0.1) {
+                            slicePoints.push(time);
+                        }
+                        inPeak = true;
+                    }
+                } else {
+                    inPeak = false;
+                }
+            }
+            if (slicePoints.length > 16) slicePoints = slicePoints.slice(0, 16);
+            for (let i = 0; i < slicePoints.length; i++) {
+                track.slices.push({
+                    id: i,
+                    startTime: slicePoints[i],
+                    endTime: (i < slicePoints.length - 1) ? slicePoints[i+1] : buffer.duration
+                });
+            }
+        } else {
+            track.slices.push({ id: 0, startTime: 0, endTime: buffer.duration });
+        }
+    }
 }
 
 function drawChopWave(track, buffer) {
@@ -941,45 +1008,40 @@ function drawChopWave(track, buffer) {
     const height = canvas.height;
     ctx.clearRect(0, 0, width, height);
 
-    // If slice offsets aren't defined, create 16 equal slices
-    if (!track.sliceOffsets) {
-        track.sliceOffsets = [];
-        const sliceLength = buffer.duration / 16;
-        for (let i = 0; i < 16; i++) {
-            track.sliceOffsets.push(i * sliceLength);
-        }
-    }
+    initTrackSlices(track, buffer);
 
-    // Draw simple waveform representation
-    const peaks = computePeaks(buffer, width); // Compute peaks for the canvas width
-    
-    ctx.fillStyle = track.color;
+    const peaks = computePeaks(buffer, width);
+    ctx.fillStyle = track.color || '#888';
     ctx.globalAlpha = 0.5;
     
     const centerY = height / 2;
     for (let x = 0; x < width; x++) {
-        // Peaks might have fewer items than width if width > 800, but computePeaks uses bucketCount=800 by default. Let's just scale it.
         const peakIdx = Math.floor((x / width) * peaks.length);
         const peak = peaks[peakIdx] || 0;
         const amp = peak * (height / 2);
         ctx.fillRect(x, centerY - amp, 1, amp * 2);
     }
     
-    // Actually let's just draw the slices
     ctx.globalAlpha = 1.0;
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 1;
-    for (let i = 0; i < track.sliceOffsets.length; i++) {
-        const offset = track.sliceOffsets[i];
-        const x = (offset / buffer.duration) * width;
+    for (let i = 0; i < track.slices.length; i++) {
+        const slice = track.slices[i];
+        
+        const xStart = (slice.startTime / buffer.duration) * width;
         ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, height);
+        ctx.moveTo(xStart, 0);
+        ctx.lineTo(xStart, height);
         ctx.stroke();
         
-        ctx.fillStyle = 'rgba(0,0,0,0.5)';
-        ctx.font = '9px sans-serif';
-        ctx.fillText(i + 1, x + 2, 10);
+        const xEnd = (slice.endTime / buffer.duration) * width;
+        
+        ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+        ctx.fillRect(xStart, 0, xEnd - xStart, height);
+        
+        ctx.fillStyle = 'rgba(0,0,0,0.8)';
+        ctx.font = '10px sans-serif';
+        ctx.fillText(i + 1, xStart + 4, 14);
     }
 }
 
@@ -1558,13 +1620,37 @@ if (chopSpeedSlider) {
 }
 
 
+const chopModeSelect = document.getElementById('chop-mode-select');
+const chopThresholdInput = document.getElementById('chop-threshold');
+
+if (chopModeSelect) {
+    chopModeSelect.addEventListener('change', (e) => {
+        const track = getActiveTrack();
+        if (track && track.engine === 'chop') {
+            track.chopMode = e.target.value;
+            track.slices = []; // reset slices to trigger recomputation
+            updateTweakUI();
+        }
+    });
+}
+if (chopThresholdInput) {
+    chopThresholdInput.addEventListener('input', (e) => {
+        const track = getActiveTrack();
+        if (track && track.engine === 'chop' && track.chopMode === 'transient') {
+            track.chopThreshold = parseFloat(e.target.value);
+            track.slices = [];
+            updateTweakUI();
+        }
+    });
+}
+
 const chopWaveCanvas = document.getElementById('chop-wave-canvas');
 if (chopWaveCanvas) {
-    let draggingSliceIndex = -1;
+    let draggingBound = null;
     
     chopWaveCanvas.addEventListener('pointerdown', (e) => {
         const track = getActiveTrack();
-        if (!track || track.engine !== 'chop' || !track.sliceOffsets) return;
+        if (!track || track.engine !== 'chop' || !track.slices) return;
         
         import('./audio.js').then(module => {
             const buffer = module.getChopBuffer(track.id);
@@ -1574,28 +1660,42 @@ if (chopWaveCanvas) {
             const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
             const clickTime = (x / rect.width) * buffer.duration;
             
-            let closestIdx = -1;
             let minDiff = Infinity;
             
-            for (let i = 0; i < track.sliceOffsets.length; i++) {
-                const diff = Math.abs(track.sliceOffsets[i] - clickTime);
-                if (diff < minDiff && diff < (buffer.duration / rect.width) * 10) {
+            // Find closest boundary (start time of slice i > 0)
+            for (let i = 1; i < track.slices.length; i++) {
+                const boundaryTime = track.slices[i].startTime;
+                const diff = Math.abs(boundaryTime - clickTime);
+                if (diff < minDiff && diff < (buffer.duration / rect.width) * 15) {
                     minDiff = diff;
-                    closestIdx = i;
+                    draggingBound = i;
                 }
             }
             
-            if (closestIdx !== -1) {
-                draggingSliceIndex = closestIdx;
+            if (draggingBound === null && track.chopMode === 'manual') {
+                const sliceIndex = track.slices.findIndex(s => clickTime >= s.startTime && clickTime <= s.endTime);
+                if (sliceIndex !== -1) {
+                    const originalSlice = track.slices[sliceIndex];
+                    const newSlice = {
+                        id: track.slices.length,
+                        startTime: clickTime,
+                        endTime: originalSlice.endTime
+                    };
+                    originalSlice.endTime = clickTime;
+                    track.slices.splice(sliceIndex + 1, 0, newSlice);
+                    track.slices.forEach((s, i) => s.id = i);
+                    drawChopWave(track, buffer);
+                }
+            } else if (draggingBound !== null) {
                 chopWaveCanvas.setPointerCapture(e.pointerId);
             }
         });
     });
     
     chopWaveCanvas.addEventListener('pointermove', (e) => {
-        if (draggingSliceIndex === -1) return;
+        if (draggingBound === null) return;
         const track = getActiveTrack();
-        if (!track || track.engine !== 'chop' || !track.sliceOffsets) return;
+        if (!track || track.engine !== 'chop' || !track.slices) return;
         
         import('./audio.js').then(module => {
             const buffer = module.getChopBuffer(track.id);
@@ -1605,18 +1705,24 @@ if (chopWaveCanvas) {
             const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
             const newTime = (x / rect.width) * buffer.duration;
             
-            const minTime = draggingSliceIndex > 0 ? track.sliceOffsets[draggingSliceIndex - 1] + 0.01 : 0;
-            const maxTime = draggingSliceIndex < track.sliceOffsets.length - 1 ? track.sliceOffsets[draggingSliceIndex + 1] - 0.01 : buffer.duration;
+            const prevSlice = track.slices[draggingBound - 1];
+            const nextSlice = track.slices[draggingBound];
             
-            track.sliceOffsets[draggingSliceIndex] = Math.max(minTime, Math.min(maxTime, newTime));
+            const minTime = prevSlice.startTime + 0.01;
+            const maxTime = nextSlice.endTime - 0.01;
+            
+            const clampedTime = Math.max(minTime, Math.min(maxTime, newTime));
+            prevSlice.endTime = clampedTime;
+            nextSlice.startTime = clampedTime;
+            
             drawChopWave(track, buffer);
         });
     });
     
     chopWaveCanvas.addEventListener('pointerup', (e) => {
-        if (draggingSliceIndex !== -1) {
-            draggingSliceIndex = -1;
-            chopWaveCanvas.releasePointerCapture(e.pointerId);
+        if (draggingBound !== null) {
+            draggingBound = null;
+            try { chopWaveCanvas.releasePointerCapture(e.pointerId); } catch (_) {}
         }
     });
 }

@@ -286,7 +286,8 @@ export function initInteraction(canvasEl) {
             
             const noteSecs = Tone.Time(n.time).toSeconds() % loopDur;
             const noteX = timeToX(noteSecs);
-            const durSecs = Tone.Time(n.duration).toSeconds();
+            let durSecs = Tone.Time(n.duration).toSeconds();
+            if (track.engine === 'chop') durSecs = Tone.Time("32n").toSeconds();
             const noteWidth = timeToX(durSecs) - timeToX(0);
             
             const noteY = noteToY(n, trackTop, trackHeight, track);
@@ -413,6 +414,18 @@ export function initInteraction(canvasEl) {
             dragStartY = clickY;
             
             const noteSecs = xToTime(clickX);
+            
+            if (noteSecs > loopDur) {
+                const measures = Math.ceil(noteSecs / Tone.Time("1m").toSeconds());
+                import('./audio.js').then(m => {
+                    if (measures > m.LOOP_LENGTH_MEASURES) {
+                        m.setLoopLengthMeasures(measures);
+                        const display = document.getElementById('bars-display');
+                        if (display) display.textContent = measures;
+                    }
+                });
+            }
+            
             const qTime = Tone.Time(noteSecs).quantize("32n");
             
             let noteVal;
@@ -444,7 +457,7 @@ export function initInteraction(canvasEl) {
                 trackId: clickedTrack.id,
                 note: noteVal,
                 time: Tone.Time(qTime).toBarsBeatsSixteenths(),
-                duration: clickedTrack.type === 'drums' ? "32n" : "8n"
+                duration: (clickedTrack.type === 'drums' || clickedTrack.engine === 'chop') ? "32n" : "8n"
             };
             if (scaleIndex !== null) dragNote.scaleIndex = scaleIndex;
 
@@ -524,7 +537,7 @@ export function initInteraction(canvasEl) {
             return;
         }
         
-        if (dragMode === 'create' && activeTrack.type !== 'drums') {
+        if (dragMode === 'create' && activeTrack.type !== 'drums' && activeTrack.engine !== 'chop') {
             // Drag to draw length
             const diffX = Math.max(0, currentX - dragStartX);
             const diffSecs = xToTime(currentX) - xToTime(dragStartX);
@@ -568,7 +581,18 @@ export function initInteraction(canvasEl) {
             dragOffsets.forEach(item => {
                 let noteSecs = item.startTime + diffXSecs;
                 if (noteSecs < 0) noteSecs = 0;
-                if (noteSecs >= loopDur) noteSecs = loopDur - 0.01;
+                
+                if (noteSecs > loopDur) {
+                    const measures = Math.ceil(noteSecs / Tone.Time("1m").toSeconds());
+                    import('./audio.js').then(m => {
+                        if (measures > m.LOOP_LENGTH_MEASURES) {
+                            m.setLoopLengthMeasures(measures);
+                            const display = document.getElementById('bars-display');
+                            if (display) display.textContent = measures;
+                        }
+                    });
+                }
+                
                 const qTime = Tone.Time(noteSecs).quantize("32n");
                 item.note.time = Tone.Time(qTime).toBarsBeatsSixteenths();
                 
