@@ -6,8 +6,10 @@
 // WAV File that the Demucs backend can read directly. Pure audio/encoding work;
 // the modal UI lives in main.js and reuses referenceWave.js to draw.
 
+import * as Tone from 'tone';
+
 export async function decodeAudioFile(file) {
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const audioCtx = Tone.getContext().rawContext;
     return await audioCtx.decodeAudioData(await file.arrayBuffer());
 }
 

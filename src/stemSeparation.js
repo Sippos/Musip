@@ -7,6 +7,8 @@
 // calls throw a StemServerUnavailableError so the "Learn a Song" flow can fall
 // back to the legacy in-browser full-mix transcription.
 
+import * as Tone from 'tone';
+
 const STEM_NAMES = ['vocals', 'drums', 'bass', 'other'];
 const POLL_INTERVAL_MS = 1500;
 
@@ -78,10 +80,9 @@ export async function separateStems(file, onProgress) {
     const jobId = await startJob(file);
     const stemUrls = await pollJob(jobId, onProgress);
 
-    // Use a single, persistent AudioContext to decode audio data.
-    // If we close the context, the decoded AudioBuffers may have their memory freed
-    // resulting in silent playback and empty waveforms!
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    // Use the global Tone.js AudioContext to decode audio data.
+    // Decoding in a different AudioContext can cause silent playback in some browsers.
+    const audioCtx = Tone.getContext().rawContext;
     
     const stems = {};
     for (const name of STEM_NAMES) {
