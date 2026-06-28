@@ -522,13 +522,23 @@ export function playSound(trackId, noteKey, time = Tone.now(), duration = "8n") 
             offset = sliceIndex * sliceLength;
         }
         
-        // Use the original duration scaled by playbackRate
+        let nextOffset;
+        if (track.sliceOffsets && track.sliceOffsets.length > sliceIndex + 1) {
+            nextOffset = track.sliceOffsets[sliceIndex + 1];
+        } else {
+            const sliceLength = player.buffer.duration / 16;
+            nextOffset = (sliceIndex + 1) * sliceLength;
+        }
+        const sliceDuration = nextOffset - offset;
+        
+        // Use the original duration scaled by playbackRate, but capped to the slice length
         const playbackRate = track.samplePlaybackRate || 1.0;
         const scaledDuration = Tone.Time(duration).toSeconds() * playbackRate;
+        const playDuration = Math.min(scaledDuration, sliceDuration / playbackRate);
         
         // Stop the player first to enforce choking, then start it
         player.stop(time);
-        player.start(time, offset, scaledDuration);
+        player.start(time, offset, playDuration);
         return;
     }
 
