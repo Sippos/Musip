@@ -191,7 +191,14 @@ function render(time) {
                 ctx.stroke();
                 
                 // Draw C note labels to avoid "infinite loop" feeling
-                if (noteInOctave === 0 && track.type !== 'drums') {
+                // Draw labels
+                if (track.engine === 'chop') {
+                    if (i % 2 === 0) {
+                        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                        ctx.font = '10px sans-serif';
+                        ctx.fillText(`Pad ${16 - i}`, 5, yBottom - 3);
+                    }
+                } else if (noteInOctave === 0 && track.type !== 'drums') {
                     ctx.fillStyle = 'rgba(0,0,0,0.3)';
                     ctx.font = '10px sans-serif';
                     ctx.fillText(`C${Math.floor(midi / 12) - 1}`, 5, yBottom - 3);

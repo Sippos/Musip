@@ -10,6 +10,7 @@ export const TRACK_MIDI_RANGE = 24;
 export const MIN_PITCH_RANGE = 6;
 export const MAX_PITCH_RANGE = 48;
 export function getPitchRange(track) {
+    if (track && track.engine === 'chop') return 16;
     const r = Math.round((track && track.pitchRange) || TRACK_MIDI_RANGE);
     return Math.max(MIN_PITCH_RANGE, Math.min(MAX_PITCH_RANGE, r));
 }

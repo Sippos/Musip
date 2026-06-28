@@ -1,5 +1,5 @@
-import { state, generateId, getActiveTrack, saveUserPreset, getPreset, undoNote, redoNote, clearRedo } from './state.js';
-import { initAudio, initTrackSynth, LOOP_LENGTH_SECONDS, LOOP_LENGTH_MEASURES, setLoopLengthMeasures, setTempo, getReferencePeaks, getReferenceDuration, hasTrackStem, updateStemAudibility, disposeTrackStem, updateSoundFontAudibility } from './audio.js';
+import { state, generateId, getActiveTrack, saveUserPreset, getPreset, undoNote, redoNote, clearRedo, defaultPresets, loadUserPresets } from './state.js';
+import { initAudio, initTrackSynth, LOOP_LENGTH_SECONDS, LOOP_LENGTH_MEASURES, setLoopLengthMeasures, setTempo, getReferencePeaks, getReferenceDuration, hasTrackStem, updateStemAudibility, disposeTrackStem, updateSoundFontAudibility, setTrackStem, getChopBuffer } from './audio.js';
 import { NOTE_NAMES, makeKey } from './pitchMap.js';
 import { DRUM_PATTERNS, CHORD_PROGRESSIONS, buildDrumNotes, buildChordNotes } from './presets.js';
 import { loadSoundFont, listSoundFonts, getPresets, releaseChannel as releaseSoundFontChannel } from './soundfont.js';
@@ -8,7 +8,7 @@ import { initInteraction } from './interaction.js';
 import { startTour } from './tour.js';
 import { initExport } from './export.js';
 import { importMidiFile, transcribeAndImport, separateTranscribeAndImport } from './midiImport.js';
-import { StemServerUnavailableError } from './stemSeparation.js';
+import { StemServerUnavailableError, separateStems } from './stemSeparation.js';
 import { drawReferenceWave, pxToOffset, hitTestWindow, pxToSeconds } from './referenceWave.js';
 import { decodeAudioFile, computePeaks, wavFileFromSlice } from './cropClip.js';
 import { SAMPLE_INSTRUMENT_LABELS, SAMPLE_INSTRUMENT_IDS } from './sampleLibrary.js';
@@ -65,7 +65,9 @@ function trackInstrumentValue(track) {
     if (track.engine === 'soundfont' && track.soundfontId && track.sfProgram) {
         return soundFontValue(track.soundfontId, track.sfProgram);
     }
+    if (track.engine === 'chop') return 'chop';
     if (track.engine === 'sampler' && track.sampleInstrument) return track.sampleInstrument;
+    if (track.engine === 'synth' && track.presetId) return `preset:${track.presetId}`;
     return SYNTH_ENGINE_VALUE;
 }
 
@@ -73,6 +75,11 @@ function instrumentLabel(track) {
     if (track.type === 'drums') return 'Drum Kit';
     if (track.engine === 'soundfont' && track.sfProgram) return track.sfProgram.name || 'SoundFont';
     const value = trackInstrumentValue(track);
+    if (value.startsWith('preset:')) {
+        const p = getPreset(track.presetId);
+        return p ? p.name : 'Custom Synth';
+    }
+    if (value === 'chop') return 'Sampler (Chop)';
     return value === SYNTH_ENGINE_VALUE ? 'Custom Synth' : (SAMPLE_INSTRUMENT_LABELS[value] || value);
 }
 
@@ -86,11 +93,21 @@ function setTrackInstrument(track, value, { preview = true } = {}) {
         track.engine = 'soundfont';
         track.soundfontId = sf.soundfontId;
         track.sfProgram = { bankMSB: sf.bankMSB, bankLSB: sf.bankLSB, program: sf.program, name: preset ? preset.name : 'SoundFont' };
+    } else if (value.startsWith('preset:')) {
+        track.engine = 'synth';
+        track.presetId = value.split(':')[1];
+        track.source = 'synth';
+    } else if (value === 'chop') {
+        track.engine = 'chop';
+        track.source = 'synth';
     } else if (value === SYNTH_ENGINE_VALUE) {
         track.engine = 'synth';
+        track.presetId = 'keys-sine'; // fallback default
+        track.source = 'synth';
     } else {
         track.engine = 'sampler';
         track.sampleInstrument = value;
+        track.source = 'synth';
     }
     initTrackSynth(track.id, getPreset(track.presetId));
     renderTrackTabs();
@@ -147,11 +164,32 @@ function populateInstrumentSelect() {
 
     const synthGroup = document.createElement('optgroup');
     synthGroup.label = 'Designed';
+    
+    const allPresets = { ...defaultPresets, ...loadUserPresets() };
+    Object.keys(allPresets).forEach(id => {
+        const p = allPresets[id];
+        if (p.type === 'synth') {
+            const opt = document.createElement('option');
+            opt.value = `preset:${id}`;
+            opt.textContent = p.name;
+            synthGroup.appendChild(opt);
+        }
+    });
+
     const synthOpt = document.createElement('option');
     synthOpt.value = SYNTH_ENGINE_VALUE;
     synthOpt.textContent = 'Custom Synth (oscillator)';
     synthGroup.appendChild(synthOpt);
     instrumentSelect.appendChild(synthGroup);
+    
+    const stemGroup = document.createElement('optgroup');
+    stemGroup.id = 'stem-optgroup';
+    stemGroup.label = 'Stem Slicing';
+    const chopOpt = document.createElement('option');
+    chopOpt.value = 'chop';
+    chopOpt.textContent = 'Sampler (Chop Engine)';
+    stemGroup.appendChild(chopOpt);
+    instrumentSelect.appendChild(stemGroup);
 }
 
 if (instrumentSelect) {
@@ -825,14 +863,23 @@ function updateTweakUI() {
     const activeTrack = getActiveTrack();
     if (!activeTrack) return;
     const isDrums = activeTrack.type === 'drums';
-    synthControls.classList.toggle('hidden', isDrums);
-    drumControls.classList.toggle('hidden', !isDrums);
+    const isChop = activeTrack.engine === 'chop';
+    
+    synthControls.classList.toggle('hidden', isDrums || isChop);
+    drumControls.classList.toggle('hidden', !isDrums || isChop);
+    const chopControls = document.getElementById('chop-controls');
+    if (chopControls) chopControls.classList.toggle('hidden', !isChop);
 
     import('./audio.js').then(module => {
+        const hasStem = module.hasTrackStem(state.activeTrackId);
+        
         if (isDrums) {
             const d = module.getDrumParams(state.activeTrackId);
             if (!d) return;
             drumSliders.forEach(el => { el.value = d[el.dataset.drum]; });
+            
+            const dStemRow = document.getElementById('drum-stem-pitch-row');
+            if (dStemRow) dStemRow.style.display = hasStem ? 'flex' : 'none';
         } else if (activeTrack.engine === 'soundfont') {
             // The SoundFont preset defines the timbre, so the oscillator wave and
             // macro knobs don't apply — hide them and just reflect the preset.
@@ -842,26 +889,90 @@ function updateTweakUI() {
             if (modeHint) modeHint.textContent = 'SoundFont · imported';
         } else {
             if (designedControls) designedControls.classList.remove('hidden');
+            
+            const stemGroup = document.getElementById('stem-optgroup');
+            if (stemGroup) stemGroup.style.display = hasStem ? '' : 'none';
+            
             const isSampler = module.isSamplerTrack(state.activeTrackId);
+            const isChop = activeTrack.engine === 'chop';
+            
             // Reflect the engine in the picker, and only show the oscillator
             // wave editor for the synth engine.
             if (instrumentSelect) {
-                instrumentSelect.value = isSampler ? (activeTrack.sampleInstrument || '') : SYNTH_ENGINE_VALUE;
+                if (isChop) {
+                    instrumentSelect.value = 'chop';
+                } else {
+                    instrumentSelect.value = isSampler ? (activeTrack.sampleInstrument || '') : SYNTH_ENGINE_VALUE;
+                }
             }
-            if (oscWaveSection) oscWaveSection.classList.toggle('hidden', isSampler);
+            if (oscWaveSection) oscWaveSection.classList.toggle('hidden', isSampler || isChop);
             // The wave editor only shapes the oscillator synth; recorded
             // instruments ignore it. Reflect that in the hint so it's clear why
             // the curve isn't shown / doesn't apply.
             const modeHint = document.getElementById('instrument-mode-hint');
-            if (modeHint) modeHint.textContent = isSampler ? 'recorded · realistic' : 'designed · synth';
+            if (modeHint) modeHint.textContent = isChop ? 'sliced · playable' : (isSampler ? 'recorded · realistic' : 'designed · synth');
 
             const m = module.getMacros(state.activeTrackId);
             if (!m) return;
             macroSliders.forEach(el => { el.value = m[el.dataset.macro]; });
             if (!isSampler) drawTweakWave(m);
+            
+            const mStemRow = document.getElementById('stem-pitch-row');
+            if (mStemRow) mStemRow.style.display = hasStem ? 'flex' : 'none';
         }
+        
+        if (isChop) {
+            const speedSlider = document.getElementById('chop-speed');
+            if (speedSlider) {
+                // we will map this to the activeTrack state
+                speedSlider.value = activeTrack.samplePlaybackRate || 1.0;
+            }
+            drawChopWave(activeTrack, module.getChopBuffer(state.activeTrackId));
+        }
+
     });
 }
+
+function drawChopWave(track, buffer) {
+    const canvas = document.getElementById('chop-wave-canvas');
+    if (!canvas || !buffer) return;
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+    ctx.clearRect(0, 0, width, height);
+
+    // If slice offsets aren't defined, create 16 equal slices
+    if (!track.sliceOffsets) {
+        track.sliceOffsets = [];
+        const sliceLength = buffer.duration / 16;
+        for (let i = 0; i < 16; i++) {
+            track.sliceOffsets.push(i * sliceLength);
+        }
+    }
+
+    // Draw simple waveform representation (using computePeaks if we want, but for now we can just draw lines or we can use the computePeaks imported from cropClip.js)
+    ctx.fillStyle = track.color;
+    ctx.globalAlpha = 0.5;
+    ctx.fillRect(0, height / 4, width, height / 2); // placeholder for actual peaks
+    
+    // Actually let's just draw the slices
+    ctx.globalAlpha = 1.0;
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < track.sliceOffsets.length; i++) {
+        const offset = track.sliceOffsets[i];
+        const x = (offset / buffer.duration) * width;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
+        
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.font = '9px sans-serif';
+        ctx.fillText(i + 1, x + 2, 10);
+    }
+}
+
 
 // Base oscillator shape, -1..1, before brightness shaping.
 function oscSample(osc, phase) {
@@ -1332,4 +1443,156 @@ if (importReferenceBtn && referenceUploadInput) {
         referenceWaveCanvas.releasePointerCapture(e.pointerId);
     });
     window.addEventListener('resize', redrawReferenceWave);
+}
+
+// "Add Sample" workflow: upload an mp3, optionally separate it into stems,
+// and create a chop track for each stem (or one for the whole file).
+const addSampleBtn = document.getElementById('add-sample-btn');
+const sampleUploadInput = document.getElementById('sample-upload');
+
+if (addSampleBtn && sampleUploadInput) {
+    addSampleBtn.addEventListener('click', () => sampleUploadInput.click());
+
+    sampleUploadInput.addEventListener('change', async (e) => {
+        const picked = e.target.files[0];
+        if (!picked) return;
+
+        // Optionally let user crop the sample first
+        const file = await openClipCropper(picked);
+        sampleUploadInput.value = '';
+        if (!file) return;
+
+        const useStems = confirm("Do you want to separate this sample into stems (Vocals, Drums, Bass, Other)?\n\nIf Cancel, it will load as a single Chop track.");
+
+        transcribeOverlay.classList.remove('hidden');
+        transcribeFill.style.width = '0%';
+        transcribeStatus.textContent = useStems ? 'Separating stems — this can take a moment.' : 'Processing sample...';
+
+        const onProgress = ({ percent, label }) => {
+            transcribeFill.style.width = `${Math.round((percent || 0) * 100)}%`;
+            if (label) transcribeStatus.textContent = label;
+        };
+
+        try {
+            await Tone.start();
+            
+            if (useStems) {
+                try {
+                    const result = await separateStems(file, onProgress);
+                    
+                    ['vocals', 'bass', 'drums', 'other'].forEach(stemName => {
+                        const buffer = result.stems[stemName];
+                        if (!buffer) return;
+                        
+                        const track = createTrack('synth');
+                        track.name = `${stemName.charAt(0).toUpperCase() + stemName.slice(1)} Chop`;
+                        track.engine = 'chop';
+                        
+                        // We set the stem audio as the track's stem. 
+                        // Our audio.js setTrackStem logic will initialize trackChopPlayers.
+                        setTrackStem(track.id, buffer);
+                    });
+                } catch (err) {
+                    if (err instanceof StemServerUnavailableError) {
+                        alert("Stem server is unavailable. You must run the backend server for stem separation. Loading as a single sample instead.");
+                        await loadSingleSample(file);
+                    } else {
+                        throw err;
+                    }
+                }
+            } else {
+                await loadSingleSample(file);
+            }
+        } catch (err) {
+            console.error('Add Sample failed:', err);
+            alert('Could not process this sample: ' + (err && err.message ? err.message : err));
+        } finally {
+            transcribeOverlay.classList.add('hidden');
+        }
+    });
+}
+
+async function loadSingleSample(file) {
+    const buffer = await decodeAudioFile(file);
+    const track = createTrack('synth');
+    track.name = `Sample Chop`;
+    track.engine = 'chop';
+    setTrackStem(track.id, buffer);
+}
+
+const chopSpeedSlider = document.getElementById('chop-speed');
+if (chopSpeedSlider) {
+    chopSpeedSlider.addEventListener('input', (e) => {
+        const track = getActiveTrack();
+        if (track && track.engine === 'chop') {
+            track.samplePlaybackRate = parseFloat(e.target.value);
+            import('./audio.js').then(module => {
+                module.updateChopSpeed(track.id);
+            });
+        }
+    });
+}
+
+
+const chopWaveCanvas = document.getElementById('chop-wave-canvas');
+if (chopWaveCanvas) {
+    let draggingSliceIndex = -1;
+    
+    chopWaveCanvas.addEventListener('pointerdown', (e) => {
+        const track = getActiveTrack();
+        if (!track || track.engine !== 'chop' || !track.sliceOffsets) return;
+        
+        import('./audio.js').then(module => {
+            const buffer = module.getChopBuffer(track.id);
+            if (!buffer) return;
+            
+            const rect = chopWaveCanvas.getBoundingClientRect();
+            const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+            const clickTime = (x / rect.width) * buffer.duration;
+            
+            let closestIdx = -1;
+            let minDiff = Infinity;
+            
+            for (let i = 0; i < track.sliceOffsets.length; i++) {
+                const diff = Math.abs(track.sliceOffsets[i] - clickTime);
+                if (diff < minDiff && diff < (buffer.duration / rect.width) * 10) {
+                    minDiff = diff;
+                    closestIdx = i;
+                }
+            }
+            
+            if (closestIdx !== -1) {
+                draggingSliceIndex = closestIdx;
+                chopWaveCanvas.setPointerCapture(e.pointerId);
+            }
+        });
+    });
+    
+    chopWaveCanvas.addEventListener('pointermove', (e) => {
+        if (draggingSliceIndex === -1) return;
+        const track = getActiveTrack();
+        if (!track || track.engine !== 'chop' || !track.sliceOffsets) return;
+        
+        import('./audio.js').then(module => {
+            const buffer = module.getChopBuffer(track.id);
+            if (!buffer) return;
+            
+            const rect = chopWaveCanvas.getBoundingClientRect();
+            const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+            const newTime = (x / rect.width) * buffer.duration;
+            
+            const minTime = draggingSliceIndex > 0 ? track.sliceOffsets[draggingSliceIndex - 1] + 0.01 : 0;
+            const maxTime = draggingSliceIndex < track.sliceOffsets.length - 1 ? track.sliceOffsets[draggingSliceIndex + 1] - 0.01 : buffer.duration;
+            
+            track.sliceOffsets[draggingSliceIndex] = Math.max(minTime, Math.min(maxTime, newTime));
+            drawChopWave(track, buffer);
+        });
+    });
+    
+    chopWaveCanvas.addEventListener('pointerup', (e) => {
+        if (draggingSliceIndex !== -1) {
+            draggingSliceIndex = -1;
+            chopWaveCanvas.releasePointerCapture(e.pointerId);
+        }
+    });
 }

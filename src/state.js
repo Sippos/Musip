@@ -6,20 +6,32 @@
 //   punch  - transient/drive (attack + decay + distortion)
 //   wobble - movement (vibrato depth + rate)
 // This lets you dial in a sound by feel instead of browsing hundreds of presets.
-export const DEFAULT_MACROS = { body: 0.55, bite: 0.4, air: 0.25, punch: 0.3, wobble: 0.0 };
+export const DEFAULT_MACROS = { body: 0.55, bite: 0.4, air: 0.25, punch: 0.3, wobble: 0.0, crush: 0.0, stemPitch: 0.0 };
 
 export const defaultPresets = {
     'bass-square': {
         name: 'Warm Bass',
         type: 'synth',
         osc: 'triangle',
-        macros: { body: 0.7, bite: 0.25, air: 0.05, punch: 0.5, wobble: 0.0 }
+        macros: { body: 0.7, bite: 0.25, air: 0.05, punch: 0.5, wobble: 0.0, crush: 0.0 }
     },
     'keys-sine': {
         name: 'Soft Keys',
         type: 'synth',
         osc: 'sine',
-        macros: { body: 0.6, bite: 0.45, air: 0.35, punch: 0.2, wobble: 0.0 }
+        macros: { body: 0.6, bite: 0.45, air: 0.35, punch: 0.2, wobble: 0.0, crush: 0.0 }
+    },
+    'atmospheric-pad': {
+        name: 'Atmospheric Pad',
+        type: 'synth',
+        osc: 'sine',
+        macros: { body: 0.9, bite: 0.1, air: 0.9, punch: 0.0, wobble: 0.2, crush: 0.0 }
+    },
+    'gritty-bass': {
+        name: 'Gritty Bass',
+        type: 'synth',
+        osc: 'square',
+        macros: { body: 0.6, bite: 0.8, air: 0.1, punch: 0.8, wobble: 0.0, crush: 0.7 }
     },
     'drums-kit': {
         name: 'Standard Kit',

@@ -71,6 +71,8 @@
             <div class="controls-right">
                 <input type="file" id="song-upload" accept="audio/*" style="display: none;">
                 <button id="learn-song-btn" class="primary-btn" title="Drop an mp3: the app splits it into stems, transcribes each part, detects key &amp; tempo, and loads it as a reference to recreate.">Learn a Song</button>
+                <input type="file" id="sample-upload" accept="audio/*" style="display: none;">
+                <button id="add-sample-btn" class="primary-btn" title="Drop an mp3 to chop it up MPC style.">Add Sample</button>
                 <input type="file" id="midi-upload" accept=".mid,.midi" style="display: none;">
                 <input type="file" id="reference-upload" accept="audio/*" style="display: none;">
 
@@ -146,6 +148,14 @@
                         <label class="macro-label"><span>Wobble</span><span class="macro-hint">vibrato</span></label>
                         <input type="range" id="macro-wobble" class="macro-slider" data-macro="wobble" min="0" max="1" step="0.01">
                     </div>
+                    <div class="slider-row">
+                        <label class="macro-label"><span>Crush</span><span class="macro-hint">clean · grit</span></label>
+                        <input type="range" id="macro-crush" class="macro-slider" data-macro="crush" min="0" max="1" step="0.01">
+                    </div>
+                    <div class="slider-row" id="stem-pitch-row">
+                        <label class="macro-label"><span>Stem Pitch</span><span class="macro-hint">semitones</span></label>
+                        <input type="range" id="macro-stemPitch" class="macro-slider" data-macro="stemPitch" min="-12" max="12" step="1" value="0">
+                    </div>
                 </div>
 
                 <hr style="border:none; border-top:1px solid rgba(0,0,0,0.1); margin: 1rem 0;">
@@ -170,6 +180,28 @@
                     <div class="slider-row">
                         <label class="macro-label"><span>Snap</span><span class="macro-hint">loose · tight</span></label>
                         <input type="range" id="drum-snap" class="drum-slider" data-drum="snap" min="0" max="1" step="0.01">
+                    </div>
+                    <div class="slider-row">
+                        <label class="macro-label"><span>Crush</span><span class="macro-hint">clean · grit</span></label>
+                        <input type="range" id="drum-crush" class="drum-slider" data-drum="crush" min="0" max="1" step="0.01">
+                    </div>
+                    <div class="slider-row" id="drum-stem-pitch-row">
+                        <label class="macro-label"><span>Stem Pitch</span><span class="macro-hint">semitones</span></label>
+                        <input type="range" id="drum-stemPitch" class="drum-slider" data-drum="stemPitch" min="-12" max="12" step="1" value="0">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chop controls -->
+            <div id="chop-controls" class="hidden">
+                <div class="tweak-section">
+                    <canvas id="chop-wave-canvas" width="250" height="80" style="background: rgba(0,0,0,0.03); border-radius: 0.5rem; margin-bottom: 0.5rem; width: 100%; display: block; cursor: crosshair;" title="Click and drag markers to adjust chops"></canvas>
+                    <p style="font-size: 0.85rem; color: rgba(0,0,0,0.6); margin-bottom: 0.5rem; text-align: center;">16 Pads · Drag slice markers to adjust</p>
+                </div>
+                <div class="tweak-section macro-grid">
+                    <div class="slider-row" style="grid-column: span 2;">
+                        <label class="macro-label"><span>Speed / Pitch</span><span class="macro-hint">vinyl style</span></label>
+                        <input type="range" id="chop-speed" min="0.5" max="2.0" step="0.01" value="1.0">
                     </div>
                 </div>
             </div>

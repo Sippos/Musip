@@ -10,8 +10,8 @@ export const trackEffects = {};
 export const trackMacros = {};   // synth tracks: { osc, body, bite, air, punch, wobble }
 export const trackDrums = {};    // drum tracks: { kickPitch, boom, snap }
 
-export const MACRO_KEYS = ['body', 'bite', 'air', 'punch', 'wobble'];
-export const DEFAULT_DRUM_PARAMS = { kickPitch: 0.3, boom: 0.4, snap: 0.5 };
+export const MACRO_KEYS = ['body', 'bite', 'air', 'punch', 'wobble', 'crush', 'stemPitch'];
+export const DEFAULT_DRUM_PARAMS = { kickPitch: 0.3, boom: 0.4, snap: 0.5, crush: 0.0, stemPitch: 0.0 };
 
 // We will use a dynamic loop length
 export let LOOP_LENGTH_MEASURES = 2;
@@ -139,6 +139,8 @@ export function getReferencePeaks(bucketCount = 800) {
 // updateStemAudibility. Audibility reuses the same mute/solo logic as the synth,
 // so soloing a stem-source track = hearing only that real instrument.
 const trackStemPlayers = {}; // trackId -> Tone.Player
+export const trackStemEffects = {}; // trackId -> { pitchShift, bitcrusher, distortion }
+export const trackChopPlayers = {}; // trackId -> Tone.Player (monophonic, for choking chops)
 
 // Should this track's stem be audible right now? Only when the track is in stem
 // mode AND it passes the normal mute/solo test the synth voices use.
@@ -169,9 +171,26 @@ function applyStemLoops() {
 // Attach (or replace) the isolated stem recording for a track.
 export function setTrackStem(trackId, audioBuffer) {
     disposeTrackStem(trackId);
-    const player = new Tone.Player(audioBuffer).toDestination();
+    
+    const pitchShift = new Tone.PitchShift(0);
+    const bitcrusher = new Tone.BitCrusher(8);
+    const distortion = new Tone.Distortion(0);
+    
+    pitchShift.connect(bitcrusher);
+    bitcrusher.connect(distortion);
+    distortion.connect(masterCompressor); // Connect to master bus so it is limited alongside synths
+    
+    trackStemEffects[trackId] = { pitchShift, bitcrusher, distortion };
+    
+    const player = new Tone.Player(audioBuffer).connect(pitchShift);
     trackStemPlayers[trackId] = player;
     applyStemLoop(trackId);
+    
+    const chopPlayer = new Tone.Player(audioBuffer).connect(pitchShift);
+    trackChopPlayers[trackId] = chopPlayer;
+    
+    // Apply macros to stem immediately
+    applyStemFx(trackId);
 }
 
 // Refresh every stem player's mute from the current track mute/solo/source.
@@ -189,6 +208,19 @@ export function startStemsIfLoaded() {
     applyStemLoops();
 }
 
+export function updateChopSpeed(trackId) {
+    const player = trackChopPlayers[trackId];
+    const track = state.tracks.find(t => t.id === trackId);
+    if (player && track && track.engine === 'chop') {
+        player.playbackRate = track.samplePlaybackRate || 1.0;
+    }
+}
+
+export function getChopBuffer(trackId) {
+    const player = trackChopPlayers[trackId];
+    return player ? player.buffer : null;
+}
+
 export function hasTrackStem(trackId) {
     return !!trackStemPlayers[trackId];
 }
@@ -199,6 +231,18 @@ export function disposeTrackStem(trackId) {
         player.unsync();
         player.dispose();
         delete trackStemPlayers[trackId];
+    }
+    const chopPlayer = trackChopPlayers[trackId];
+    if (chopPlayer) {
+        chopPlayer.dispose();
+        delete trackChopPlayers[trackId];
+    }
+    const fx = trackStemEffects[trackId];
+    if (fx) {
+        fx.pitchShift.dispose();
+        fx.bitcrusher.dispose();
+        fx.distortion.dispose();
+        delete trackStemEffects[trackId];
     }
 }
 
@@ -276,10 +320,12 @@ export function initTrackSynth(trackId, preset) {
         trackSynths[trackId] = null;
     }
     if (trackEffects[trackId]) {
-        trackEffects[trackId].vibrato.dispose();
-        trackEffects[trackId].filter.dispose();
-        trackEffects[trackId].chorus.dispose();
-        trackEffects[trackId].reverbSend.dispose();
+        if(trackEffects[trackId].vibrato) trackEffects[trackId].vibrato.dispose();
+        if(trackEffects[trackId].filter) trackEffects[trackId].filter.dispose();
+        if(trackEffects[trackId].chorus) trackEffects[trackId].chorus.dispose();
+        if(trackEffects[trackId].reverbSend) trackEffects[trackId].reverbSend.dispose();
+        if(trackEffects[trackId].bitcrusher) trackEffects[trackId].bitcrusher.dispose();
+        if(trackEffects[trackId].distortion) trackEffects[trackId].distortion.dispose();
         delete trackEffects[trackId];
     }
 
@@ -296,16 +342,23 @@ export function initTrackSynth(trackId, preset) {
     }
 
     if (preset.type === 'drums') {
+        const bitcrusher = new Tone.BitCrusher(8);
+        const distortion = new Tone.Distortion(0);
+        bitcrusher.connect(distortion);
+        distortion.connect(masterCompressor);
+
+        trackEffects[trackId] = { bitcrusher, distortion };
+
         trackSynths[trackId] = {
-            kick: new Tone.MembraneSynth({ pitchDecay: 0.05, octaves: 4 }).connect(masterCompressor),
+            kick: new Tone.MembraneSynth({ pitchDecay: 0.05, octaves: 4 }).connect(bitcrusher),
             snare: new Tone.NoiseSynth({
                 noise: { type: 'white' },
                 envelope: { attack: 0.005, decay: 0.2, sustain: 0 }
-            }).connect(masterCompressor),
+            }).connect(bitcrusher),
             hat: new Tone.NoiseSynth({
                 noise: { type: 'pink' },
                 envelope: { attack: 0.005, decay: 0.05, sustain: 0 }
-            }).connect(masterCompressor),
+            }).connect(bitcrusher),
             kickNote: 'C1'
         };
         trackSynths[trackId].kick.volume.value = 5;
@@ -321,16 +374,20 @@ export function initTrackSynth(trackId, preset) {
         // which is what was overloading the audio engine on dense imports.
         const vibrato = new Tone.Vibrato(5, 0);
         const filter = new Tone.Filter(12000, "lowpass");
+        const bitcrusher = new Tone.BitCrusher(8);
+        const distortion = new Tone.Distortion(0);
         const chorus = new Tone.Chorus({ frequency: 0.6, delayTime: 3.5, depth: 0.3, wet: 0.12 }).start();
         const reverbSend = new Tone.Gain(0);
 
         vibrato.connect(filter);
-        filter.connect(chorus);
+        filter.connect(bitcrusher);
+        bitcrusher.connect(distortion);
+        distortion.connect(chorus);
         chorus.connect(masterCompressor); // dry path
         chorus.connect(reverbSend);       // wet send -> shared reverb
         reverbSend.connect(masterReverb);
 
-        trackEffects[trackId] = { vibrato, filter, chorus, reverbSend };
+        trackEffects[trackId] = { vibrato, filter, bitcrusher, distortion, chorus, reverbSend };
 
         const sampleId = track && track.engine === 'sampler' ? track.sampleInstrument : null;
 
@@ -389,6 +446,14 @@ export const scales = {
 
 export function getTrackScale(track) {
     if (track.type === 'drums') return scales.drums;
+    if (track.engine === 'chop') {
+        const notes = [];
+        const baseMidi = track.baseMidi || 48; // C3
+        for (let i = 0; i < 16; i++) {
+            notes.push(Tone.Frequency(baseMidi + i, "midi").toNote());
+        }
+        return notes;
+    }
     
     // Spread the 5 typing/drawing lanes evenly across the 24-semitone default pitch range
     // starting from the track's base pitch, so drawn notes match imported tracks visually and audibly.
@@ -440,6 +505,33 @@ export function playSound(trackId, noteKey, time = Tone.now(), duration = "8n") 
         return;
     }
 
+    if (track && track.engine === 'chop') {
+        const player = trackChopPlayers[trackId];
+        if (!player || !player.buffer.loaded) return;
+        
+        const midi = Tone.Frequency(noteKey).toMidi();
+        const baseMidi = track.baseMidi || 48;
+        const sliceIndex = Math.max(0, Math.min(15, midi - baseMidi));
+        
+        let offset;
+        if (track.sliceOffsets && track.sliceOffsets.length > sliceIndex) {
+            offset = track.sliceOffsets[sliceIndex];
+        } else {
+            const sliceLength = player.buffer.duration / 16;
+            offset = sliceIndex * sliceLength;
+        }
+        
+        // Use the original duration scaled by playbackRate
+        const playbackRate = track.samplePlaybackRate || 1.0;
+        const scaledDuration = Tone.Time(duration).toSeconds() * playbackRate;
+        
+        // Stop currently playing chop to ensure monophonic choking
+        player.stop(time);
+        
+        player.restart(time, offset, scaledDuration);
+        return;
+    }
+
     const synth = trackSynths[trackId];
     if (!synth) return;
 
@@ -467,6 +559,29 @@ export function instrumentsStart(trackId, noteVal) {
         return;
     }
 
+    if (track && track.engine === 'chop') {
+        const player = trackChopPlayers[trackId];
+        if (!player || !player.buffer.loaded) return;
+        
+        const midi = Tone.Frequency(noteVal).toMidi();
+        const baseMidi = track.baseMidi || 48;
+        const sliceIndex = Math.max(0, Math.min(15, midi - baseMidi));
+        
+        let offset;
+        if (track.sliceOffsets && track.sliceOffsets.length > sliceIndex) {
+            offset = track.sliceOffsets[sliceIndex];
+        } else {
+            const sliceLength = player.buffer.duration / 16;
+            offset = sliceIndex * sliceLength;
+        }
+        
+        // Stop currently playing chop
+        player.stop(Tone.now());
+        
+        player.restart(Tone.now(), offset);
+        return;
+    }
+
     const synth = trackSynths[trackId];
     if (synth instanceof Tone.Sampler && !synth.loaded) return; // buffers still streaming
     if (synth && synth.triggerAttack) {
@@ -478,6 +593,12 @@ export function instrumentsStop(trackId, noteVal) {
     const track = state.tracks.find(t => t.id === trackId);
     if (track && track.engine === 'soundfont') {
         soundfont.noteOff(trackId, Tone.Frequency(noteVal).toMidi());
+        return;
+    }
+
+    if (track && track.engine === 'chop') {
+        const player = trackChopPlayers[trackId];
+        if (player) player.stop(Tone.now());
         return;
     }
 
@@ -530,6 +651,34 @@ export function applyMacros(trackId) {
     // Wobble: vibrato depth + rate.
     fx.vibrato.depth.value = m.wobble * 0.4;
     fx.vibrato.frequency.value = 4 + m.wobble * 3;
+    
+    // Crush: bitcrusher bits (8 down to 2) and distortion amount
+    fx.bitcrusher.bits.value = 8 - Math.floor(m.crush * 6); // 8 -> 2
+    fx.distortion.distortion = m.crush * 0.8;
+    
+    applyStemFx(trackId);
+}
+
+export function applyStemFx(trackId) {
+    const fx = trackStemEffects[trackId];
+    if (!fx) return;
+    
+    const m = trackMacros[trackId];
+    const d = trackDrums[trackId];
+    const crush = m ? m.crush : (d ? d.crush : 0);
+    const stemPitch = m ? m.stemPitch : (d ? d.stemPitch : 0);
+    
+    // Convert -1..1 stemPitch slider to semitones (-12..12) if it was designed 0..1? 
+    // Wait, the slider will be 0..1 in state.js or -12..12?
+    // DEFAULT_MACROS in state.js has stemPitch: 0.0. A 0..1 slider is typical. 
+    // Let's assume slider is -1..1 or 0..1? Standard macros are 0..1. 
+    // If stemPitch is -12..12, we can just use the value. 
+    // Let's assume the UI sends the raw semitone value (-12 to +12) or we scale it.
+    // If it's a standard macro 0..1, then (stemPitch - 0.5) * 24 maps to -12..+12.
+    // I'll assume the UI sends -12 to +12 directly, so stemPitch is the exact semitone value.
+    fx.pitchShift.pitch = stemPitch;
+    fx.bitcrusher.bits.value = 8 - Math.floor(crush * 6);
+    fx.distortion.distortion = crush * 0.8;
 }
 
 export function setMacro(trackId, key, value) {
@@ -565,6 +714,14 @@ export function applyDrumParams(trackId) {
     // Snap: snare + hat decay (more snap = shorter, tighter).
     kit.snare.set({ envelope: { decay: 0.35 - d.snap * 0.3 } });
     kit.hat.set({ envelope: { decay: 0.12 - d.snap * 0.1 } });
+    
+    const fx = trackEffects[trackId];
+    if (fx && fx.bitcrusher) {
+        fx.bitcrusher.bits.value = 8 - Math.floor(d.crush * 6);
+        fx.distortion.distortion = d.crush * 0.8;
+    }
+    
+    applyStemFx(trackId);
 }
 
 export function setDrumParam(trackId, key, value) {
