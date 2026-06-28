@@ -1494,6 +1494,20 @@ if (addSampleBtn && sampleUploadInput) {
                         const buffer = result.stems[stemName];
                         if (!buffer) return;
                         
+                        // Check if the stem is completely empty/silent
+                        const data = buffer.getChannelData(0);
+                        let maxPeak = 0;
+                        for (let i = 0; i < data.length; i += 100) {
+                            if (Math.abs(data[i]) > maxPeak) {
+                                maxPeak = Math.abs(data[i]);
+                            }
+                        }
+                        // Demucs might output very low-level noise even for empty stems
+                        if (maxPeak < 0.01) {
+                            console.log(`Skipping silent stem track: ${stemName} (peak: ${maxPeak})`);
+                            return;
+                        }
+                        
                         const track = createTrack('synth');
                         track.name = `${stemName.charAt(0).toUpperCase() + stemName.slice(1)} Chop`;
                         track.engine = 'chop';
