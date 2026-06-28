@@ -10,7 +10,8 @@ const activePresses = {};
 // When Scale Lock is on and a song's key is known, snap a note name to the
 // nearest in-key pitch so handcrafted notes stay in tune. Returns the note
 // unchanged otherwise (chromatic placement).
-function applyScaleLock(noteName) {
+function applyScaleLock(noteName, track) {
+    if (track && track.engine === 'chop') return noteName;
     if (!state.scaleLock || !state.song.key) return noteName;
     const midi = Tone.Frequency(noteName).toMidi();
     const snapped = snapMidiToScale(midi, state.song.key.scalePitchClasses);
@@ -422,7 +423,7 @@ export function initInteraction(canvasEl) {
                     else if (midi >= 37) noteVal = 'D2'; // Snare
                     else noteVal = 'C2'; // Kick
                 } else {
-                    noteVal = applyScaleLock(noteVal);
+                    noteVal = applyScaleLock(noteVal, clickedTrack);
                 }
             } else {
                 const yWithinTrack = clickY - trackTop;
@@ -584,7 +585,13 @@ export function initInteraction(canvasEl) {
                             else if (midi >= 37) newNoteVal = 'D2';
                             else newNoteVal = 'C2';
                         } else {
-                            newNoteVal = applyScaleLock(newNoteVal);
+                            newNoteVal = applyScaleLock(newNoteVal, t);
+                        }
+                        // Clamp chop track drags to strictly Pad 1-16 limits (MIDI 48-63)
+                        if (t.engine === 'chop') {
+                            const midi = Tone.Frequency(newNoteVal).toMidi();
+                            const clamped = Math.max(48, Math.min(63, midi));
+                            newNoteVal = Tone.Frequency(clamped, 'midi').toNote();
                         }
                         item.note.scaleIndex = undefined;
                     } else {
