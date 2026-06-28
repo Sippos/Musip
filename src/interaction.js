@@ -230,6 +230,9 @@ export function initInteraction(canvasEl) {
             if (track.type === 'drums') {
                 minLimit = 36;
                 maxLimit = 36; // Lock drum scrolling
+            } else if (track.engine === 'chop') {
+                minLimit = 48;
+                maxLimit = 48; // Lock chop scrolling
             }
             const delta = Math.sign(e.deltaY);
             track.baseMidi = Math.max(minLimit, Math.min(maxLimit, Math.round((track.baseMidi || 48)) + delta));
