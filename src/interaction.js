@@ -444,7 +444,7 @@ export function initInteraction(canvasEl) {
                 trackId: clickedTrack.id,
                 note: noteVal,
                 time: Tone.Time(qTime).toBarsBeatsSixteenths(),
-                duration: "32n"
+                duration: clickedTrack.type === 'drums' ? "32n" : "8n"
             };
             if (scaleIndex !== null) dragNote.scaleIndex = scaleIndex;
 
