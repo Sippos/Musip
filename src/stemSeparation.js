@@ -11,6 +11,7 @@ import * as Tone from 'tone';
 
 const STEM_NAMES = ['vocals', 'drums', 'bass', 'other'];
 const POLL_INTERVAL_MS = 1500;
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 export class StemServerUnavailableError extends Error {
     constructor(message) {
@@ -28,7 +29,7 @@ async function startJob(file) {
     form.append('file', file, file.name);
     let res;
     try {
-        res = await fetch('/api/separate', { method: 'POST', body: form });
+        res = await fetch(`${API_BASE}/api/separate`, { method: 'POST', body: form });
     } catch (err) {
         // Network error / connection refused = no server running.
         throw new StemServerUnavailableError();
@@ -48,7 +49,7 @@ async function pollJob(jobId, onProgress) {
     while (true) {
         let res;
         try {
-            res = await fetch(`/api/separate/${jobId}`);
+            res = await fetch(`${API_BASE}/api/separate/${jobId}`);
         } catch (err) {
             throw new StemServerUnavailableError();
         }
@@ -86,7 +87,7 @@ export async function separateStems(file, onProgress) {
     
     const stems = {};
     for (const name of STEM_NAMES) {
-        if (stemUrls[name]) stems[name] = await fetchAndDecode(stemUrls[name], audioCtx);
+        if (stemUrls[name]) stems[name] = await fetchAndDecode(`${API_BASE}${stemUrls[name]}`, audioCtx);
     }
     // Reuse the dropped file (not a stem) as the full-quality reference.
     const original = await audioCtx.decodeAudioData(await file.arrayBuffer());
