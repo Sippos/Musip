@@ -167,7 +167,14 @@ function render(time) {
                 // and dim out-of-key rows so the "safe" notes are obvious at a
                 // glance. Falls back to plain black-key shading otherwise.
                 const key = state.song.key;
-                if (key && track.type !== 'drums') {
+                if (track.engine === 'chop') {
+                    // Chop tracks are slices, not musical pitches, so ignore scale coloring.
+                    // Just alternate rows slightly to help guide the eye.
+                    if (i % 2 === 0) {
+                        ctx.fillStyle = 'rgba(0,0,0,0.03)';
+                        ctx.fillRect(0, yTop, canvas.width, yBottom - yTop);
+                    }
+                } else if (key && track.type !== 'drums') {
                     if (noteInOctave === key.tonic) {
                         ctx.fillStyle = 'rgba(27, 158, 110, 0.12)';
                         ctx.fillRect(0, yTop, canvas.width, yBottom - yTop);
@@ -213,6 +220,15 @@ function render(time) {
         ctx.moveTo(0, trackTop + trackHeight);
         ctx.lineTo(canvas.width, trackTop + trackHeight);
         ctx.stroke();
+        
+        // Track Name Label (helps orient the user when scrolling vertically)
+        if (trackHeight > 40 && trackTop < canvas.height && trackTop + trackHeight > 0) {
+            ctx.fillStyle = track.color;
+            ctx.globalAlpha = 0.8;
+            ctx.font = 'bold 12px sans-serif';
+            ctx.fillText(track.name, 50, trackTop + 16);
+            ctx.globalAlpha = 1.0;
+        }
     });
 
     // Beat grid: vertical bar/beat lines aligned to the playback tempo, so the
